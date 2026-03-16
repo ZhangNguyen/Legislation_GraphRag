@@ -1,0 +1,20 @@
+Metadata-Version: 2.4
+Name: legislation-rag
+Version: 0.1.0
+Summary: Legal RAG system responsible for asking and answering from users' response
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: fastapi>=0.110.0
+Requires-Dist: uvicorn[standard]>=0.29.0
+Requires-Dist: langchain>=0.2.0
+Requires-Dist: langchain-openai>=0.1.6
+Requires-Dist: openai>=1.30.0
+Requires-Dist: qdrant-client==1.9.1
+Requires-Dist: pypdf>=4.2.0
+Requires-Dist: ocrmypdf>=13.12.0
+Requires-Dist: pytesseract>=0.3.10
+Requires-Dist: pdf2image>=1.17.0
+Requires-Dist: Pillow>=10.0.0
+Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: pydantic>=2.6.0
+Dynamic: license-file

@@ -1,0 +1,33 @@
+[project]
+name = "legislation-rag"
+version = "0.1.0"
+description = "Legal RAG system responsible for asking and answering from users' response"
+requires-python = ">=3.10"
+
+dependencies = [
+    # API
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+
+    # LLM + RAG
+    "langchain>=0.2.0",
+    "langchain-openai>=0.1.6",
+    "openai>=1.30.0",
+
+    # Vector DB
+    "qdrant-client==1.9.1",
+
+    # Data loading
+    "pypdf>=4.2.0",
+
+    # OCR pipeline
+    "ocrmypdf>=13.12.0",
+    "pytesseract>=0.3.10",
+    "pdf2image>=1.17.0",
+    "Pillow>=10.0.0",
+
+    # Config & schema
+    "python-dotenv>=1.0.1",
+    "pydantic>=2.6.0",
+    "sentence-transformers"
+]
