@@ -3,6 +3,10 @@ from __future__ import annotations
 import os
 from typing import List
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 def _split_csv(raw: str) -> List[str]:
