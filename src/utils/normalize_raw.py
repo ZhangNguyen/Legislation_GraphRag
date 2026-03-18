@@ -9,34 +9,53 @@ from typing import Optional
 import pytesseract
 from pdf2image import convert_from_path
 
-from src.utils.loader import load_document
+from src.utils.loader import load_document, normalize_text
 
 
 @dataclass(frozen=True)
 class OcrConfig:
-    # Fixed defaults (đúng như bạn muốn). Có thể override bằng ENV để deploy sau này.
+    # Có thể override bằng ENV
     poppler_path: str = r"C:\Program Files\Release-25.12.0-0\poppler-25.12.0\Library\bin"
     tesseract_cmd: str = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     lang: str = "vie"
     dpi: int = 300
 
-    # folders fixed
     raw_dir: Path = Path("data/raw")
     normalized_dir: Path = Path("data/normalized")
 
-    # If raw PDF already has text, copy PDF to normalized
-    copy_text_pdf_to_normalized: bool = True
-
-    # minimal text length to consider “has text”
+    # số ký tự tối thiểu để coi PDF là có text extractable
     min_text_len: int = 50
 
+    # nếu output txt đã tồn tại và đủ lớn thì bỏ qua
+    skip_if_exists_min_bytes: int = 100
 
-def _ocr_pdf_to_txt(
-    pdf_path: Path,
-    out_txt: Path,
-    cfg: OcrConfig,
-) -> None:
-    # Point pytesseract to tesseract.exe
+
+def _build_runtime_cfg(cfg: OcrConfig) -> OcrConfig:
+    return OcrConfig(
+        poppler_path=os.getenv("POPPLER_PATH", cfg.poppler_path),
+        tesseract_cmd=os.getenv("TESSERACT_CMD", cfg.tesseract_cmd),
+        lang=os.getenv("TESSERACT_LANG", cfg.lang),
+        dpi=int(os.getenv("OCR_DPI", str(cfg.dpi))),
+        raw_dir=Path(os.getenv("RAW_DIR", str(cfg.raw_dir))),
+        normalized_dir=Path(os.getenv("NORMALIZED_DIR", str(cfg.normalized_dir))),
+        min_text_len=int(os.getenv("MIN_TEXT_LEN", str(cfg.min_text_len))),
+        skip_if_exists_min_bytes=int(
+            os.getenv("SKIP_IF_EXISTS_MIN_BYTES", str(cfg.skip_if_exists_min_bytes))
+        ),
+    )
+
+
+def _to_normalized_txt_path(src_path: Path, raw_dir: Path, normalized_dir: Path) -> Path:
+    rel = src_path.relative_to(raw_dir)
+    rel_no_suffix = rel.with_suffix(".txt")
+    return normalized_dir / rel_no_suffix
+
+
+def _should_skip_existing(out_txt: Path, min_bytes: int) -> bool:
+    return out_txt.exists() and out_txt.stat().st_size >= min_bytes
+
+
+def _ocr_pdf_to_txt(pdf_path: Path, out_txt: Path, cfg: OcrConfig) -> None:
     pytesseract.pytesseract.tesseract_cmd = cfg.tesseract_cmd
 
     images = convert_from_path(
@@ -46,60 +65,81 @@ def _ocr_pdf_to_txt(
     )
 
     texts: list[str] = []
-    for img in images:
+    for i, img in enumerate(images, start=1):
         txt = pytesseract.image_to_string(img, lang=cfg.lang)
+        txt = normalize_text(txt)
         texts.append(txt)
+        print(f"[OCR] {pdf_path.name}: page {i}/{len(images)} done")
+
+    final_text = "\n\n".join(t for t in texts if t.strip())
 
     out_txt.parent.mkdir(parents=True, exist_ok=True)
-    out_txt.write_text("\n\n".join(texts), encoding="utf-8")
+    out_txt.write_text(final_text, encoding="utf-8")
+    print(f"[OCR] wrote -> {out_txt}")
+
+
+def _handle_txt_file(fp: Path, out_txt: Path) -> None:
+    out_txt.parent.mkdir(parents=True, exist_ok=True)
+
+    raw_text = fp.read_text(encoding="utf-8", errors="ignore")
+    cleaned = normalize_text(raw_text)
+    out_txt.write_text(cleaned, encoding="utf-8")
+
+    print(f"[NORMALIZE] TXT -> {out_txt}")
+
+
+def _handle_pdf_file(fp: Path, out_txt: Path, cfg: OcrConfig) -> None:
+    out_txt.parent.mkdir(parents=True, exist_ok=True)
+
+    # thử extract text trước
+    try:
+        extracted = load_document(fp)  # pypdf + normalize_text
+    except Exception as e:
+        print(f"[NORMALIZE][WARN] read PDF failed, OCR fallback: {fp} | err={e}")
+        extracted = ""
+
+    # nếu PDF có text thì ghi ra txt luôn
+    if len(extracted.strip()) >= cfg.min_text_len:
+        out_txt.write_text(extracted, encoding="utf-8")
+        print(f"[NORMALIZE] TEXT-PDF -> {out_txt}")
+        return
+
+    # nếu không có text thì OCR
+    print(f"[NORMALIZE] OCR start -> {fp}")
+    _ocr_pdf_to_txt(fp, out_txt, cfg)
+    print(f"[NORMALIZE] OCR done -> {out_txt}")
 
 
 def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
     """
-    Convert everything in data/raw -> data/normalized
+    Chuẩn hóa toàn bộ file trong data/raw sang data/normalized
 
     - If PDF has extractable text: optionally copy PDF -> normalized
     - If PDF has no extractable text: OCR -> normalized/<same_name>.txt
     - TXT in raw: copy to normalized
     - DOC/DOCX in raw: extract text -> normalized/<same_name>.txt (requires parser/tool)
     """
-    cfg = cfg or OcrConfig()
+    cfg = _build_runtime_cfg(cfg or OcrConfig())
 
     cfg.normalized_dir.mkdir(parents=True, exist_ok=True)
+
     if not cfg.raw_dir.exists():
         raise RuntimeError(f"Missing folder: {cfg.raw_dir}")
 
-    raw_files = sorted(cfg.raw_dir.glob("*.*"))
+    raw_files = [p for p in cfg.raw_dir.rglob("*") if p.is_file()]
     if not raw_files:
-        print(f"[NORMALIZE] No files in {cfg.raw_dir}")
+        print(f"[NORMALIZE] No files found in {cfg.raw_dir}")
         return
 
-    # Allow override by ENV for deploy later (không bắt buộc)
-    poppler_path = os.getenv("POPPLER_PATH", cfg.poppler_path)
-    tesseract_cmd = os.getenv("TESSERACT_CMD", cfg.tesseract_cmd)
-    lang = os.getenv("TESSERACT_LANG", cfg.lang)
-    dpi = int(os.getenv("OCR_DPI", str(cfg.dpi)))
-
-    cfg = OcrConfig(
-        poppler_path=poppler_path,
-        tesseract_cmd=tesseract_cmd,
-        lang=lang,
-        dpi=dpi,
-        raw_dir=cfg.raw_dir,
-        normalized_dir=cfg.normalized_dir,
-        copy_text_pdf_to_normalized=cfg.copy_text_pdf_to_normalized,
-        min_text_len=cfg.min_text_len,
-    )
+    print(f"[NORMALIZE] raw_dir={cfg.raw_dir}")
+    print(f"[NORMALIZE] normalized_dir={cfg.normalized_dir}")
+    print(f"[NORMALIZE] total_files={len(raw_files)}")
 
     for fp in raw_files:
-        suf = fp.suffix.lower()
+        suffix = fp.suffix.lower()
 
-        # 1) raw .txt -> copy
-        if suf == ".txt":
-            out_txt = cfg.normalized_dir / fp.name
-            if not out_txt.exists():
-                shutil.copy2(fp, out_txt)
-                print(f"[NORMALIZE] copied TXT -> {out_txt}")
+        if suffix not in {".pdf", ".txt"}:
+            print(f"[NORMALIZE] skip unsupported: {fp}")
             continue
 
         # 1.5) raw .doc/.docx -> extract to txt
@@ -159,5 +199,10 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
             print(f"[NORMALIZE] OCR done -> {out_txt.name}")
             continue
 
-        # ignore other files
-        print(f"[NORMALIZE] skip unsupported: {fp.name}")
+        try:
+            if suffix == ".txt":
+                _handle_txt_file(fp, out_txt)
+            elif suffix == ".pdf":
+                _handle_pdf_file(fp, out_txt, cfg)
+        except Exception as e:
+            print(f"[NORMALIZE][ERROR] failed: {fp} | err={e}")
