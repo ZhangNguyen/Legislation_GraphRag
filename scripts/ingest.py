@@ -99,6 +99,7 @@ from src.rag.chunking_legal import legal_chunk
 from src.rag.ingestion import upsert_chunks
 from src.storage.qdrant_store import ensure_collection, get_qdrant_client
 from src.utils.loader import load_document
+from src.utils.normalize_raw import normalize_raw_to_normalized
 
 try:
     from src.rag.chunking_legal import semantic_merge_safe
@@ -128,6 +129,11 @@ def _prefix_chunks(chunks: list[dict], doc_prefix: str) -> list[dict]:
 
 def main():
     parser = argparse.ArgumentParser(description="Ingest legal documents into Qdrant (NO OCR).")
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Normalize data/raw -> data/normalized trước khi ingest.",
+    )
     parser.add_argument("--input_dir", type=str, default=settings.normalized_dir)
     parser.add_argument("--glob", type=str, default=settings.normalized_glob)
     parser.add_argument("--max_chars", type=int, default=1600)
@@ -139,6 +145,9 @@ def main():
     parser.add_argument("--max_merged_chars", type=int, default=1600)
 
     args = parser.parse_args()
+
+    if args.normalize:
+        normalize_raw_to_normalized()
 
     input_dir = Path(args.input_dir)
     if not input_dir.exists():

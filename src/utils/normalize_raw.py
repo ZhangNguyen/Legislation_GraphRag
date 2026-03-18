@@ -61,6 +61,7 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
     - If PDF has extractable text: optionally copy PDF -> normalized
     - If PDF has no extractable text: OCR -> normalized/<same_name>.txt
     - TXT in raw: copy to normalized
+    - DOC/DOCX in raw: extract text -> normalized/<same_name>.txt (requires parser/tool)
     """
     cfg = cfg or OcrConfig()
 
@@ -99,6 +100,27 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
             if not out_txt.exists():
                 shutil.copy2(fp, out_txt)
                 print(f"[NORMALIZE] copied TXT -> {out_txt}")
+            continue
+
+        # 1.5) raw .doc/.docx -> extract to txt
+        if suf in {".doc", ".docx"}:
+            out_txt = cfg.normalized_dir / f"{fp.stem}.txt"
+            if out_txt.exists() and out_txt.stat().st_size > 100:
+                print(f"[NORMALIZE] DOC exists -> skip: {out_txt.name}")
+                continue
+
+            try:
+                text = load_document(fp)
+            except Exception as e:
+                print(f"[NORMALIZE][WARN] {fp.name}: cannot extract DOC/DOCX -> skip. err={e}")
+                continue
+
+            if len(text.strip()) < cfg.min_text_len:
+                print(f"[NORMALIZE][WARN] {fp.name}: extracted text too short -> skip")
+                continue
+
+            out_txt.write_text(text, encoding="utf-8")
+            print(f"[NORMALIZE] extracted DOC/DOCX -> {out_txt}")
             continue
 
         # 2) raw .pdf
