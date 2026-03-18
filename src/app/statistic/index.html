@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Legislation RAG</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    textarea, input { width: 100%; padding: 10px; margin: 8px 0; }
+    button { padding: 10px 14px; margin-right: 8px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 12px; overflow: auto; white-space: pre-wrap; }
+    .row { display: flex; gap: 12px; }
+    .col { flex: 1; }
+    .card { border: 1px solid #ddd; padding: 12px; margin-top: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Legislation RAG</h1>
+
+  <div class="card">
+    <h3>Chat</h3>
+    <textarea id="question" rows="4" placeholder="Nhập câu hỏi pháp luật..."></textarea>
+
+    <div class="row">
+      <div class="col">
+        <input id="qdrant_top_k" type="number" value="30" placeholder="Qdrant top k">
+      </div>
+      <div class="col">
+        <input id="final_top_k" type="number" value="15" placeholder="Final top k">
+      </div>
+      <div class="col">
+        <input id="cross_top_k" type="number" value="8" placeholder="Cross top k">
+      </div>
+    </div>
+
+    <button onclick="sendChat()">Gửi câu hỏi</button>
+    <button onclick="reloadGraph()">Reload graph</button>
+    <button onclick="rebuildAll()">Rebuild all</button>
+  </div>
+
+  <div class="card">
+    <h3>Answer</h3>
+    <pre id="answer"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Sources</h3>
+    <pre id="sources"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Debug / Timings</h3>
+    <pre id="debug"></pre>
+  </div>
+
+  <script>
+    async function sendChat() {
+      const body = {
+        question: document.getElementById("question").value,
+        qdrant_top_k: Number(document.getElementById("qdrant_top_k").value || 30),
+        final_top_k: Number(document.getElementById("final_top_k").value || 15),
+        cross_top_k: Number(document.getElementById("cross_top_k").value || 8),
+        include_debug: true
+      };
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      document.getElementById("answer").textContent = data.answer || "";
+      document.getElementById("sources").textContent = JSON.stringify(data.sources || [], null, 2);
+      document.getElementById("debug").textContent = JSON.stringify({
+        timings_ms: data.timings_ms,
+        debug: data.debug
+      }, null, 2);
+    }
+
+    async function reloadGraph() {
+      const res = await fetch("/api/admin/reload-graph", { method: "POST" });
+      const data = await res.json();
+      document.getElementById("debug").textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function rebuildAll() {
+      const res = await fetch("/api/ingest/rebuild-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      document.getElementById("debug").textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>

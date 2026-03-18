@@ -1,5 +1,14 @@
-from pydantic import BaseModel
+from __future__ import annotations
+
 import os
+from pydantic import BaseModel
+
+
+def _split_csv(raw: str) -> list[str]:
+    raw = (raw or "").strip()
+    if not raw:
+        return ["*"]
+    return [x.strip() for x in raw.split(",") if x.strip()]
 
 
 class Settings(BaseModel):
@@ -13,18 +22,39 @@ class Settings(BaseModel):
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "legal_chunks")
 
-    # Retrieval
-    top_k: int = int(os.getenv("TOP_K", "10"))
+    # Corpus
+    normalized_dir: str = os.getenv("NORMALIZED_DIR", "data/normalized")
+    normalized_glob: str = os.getenv("NORMALIZED_GLOB", "*.*")
 
-    # OCR (deploy-friendly override)
-    poppler_path: str = os.getenv("POPPLER_PATH", r"C:\Program Files\Release-25.12.0-0\poppler-25.12.0\Library\bin")
-    tesseract_cmd: str = os.getenv("TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+    # Retrieval
+    qdrant_top_k: int = int(os.getenv("QDRANT_TOP_K", "30"))
+    final_top_k: int = int(os.getenv("FINAL_TOP_K", "15"))
+    cross_top_k: int = int(os.getenv("CROSS_TOP_K", "8"))
+    max_graph_hops: int = int(os.getenv("MAX_GRAPH_HOPS", "2"))
+    max_graph_nodes: int = int(os.getenv("MAX_GRAPH_NODES", "80"))
+
+    # BM25
+    bm25_stats_path: str = os.getenv("BM25_STATS_PATH", "outputs/bm25/bm25_stats.json")
+
+    # Answer / UI
+    answer_max_context_passages: int = int(os.getenv("ANSWER_MAX_CONTEXT_PASSAGES", "8"))
+    answer_max_source_items: int = int(os.getenv("ANSWER_MAX_SOURCE_ITEMS", "6"))
+
+    # Rerank
+    rerank_model: str = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
+    rerank_device: str = os.getenv("RERANK_DEVICE", "cpu")
+    rerank_top_n: int = int(os.getenv("RERANK_TOP_N", "12"))
+
+    # Web
+    app_host: str = os.getenv("APP_HOST", "127.0.0.1")
+    app_port: int = int(os.getenv("APP_PORT", "8000"))
+    cors_origins: list[str] = _split_csv(os.getenv("CORS_ORIGINS", "*"))
+
+    # OCR vẫn giữ nhưng không dùng trong luồng chạy hiện tại
+    poppler_path: str = os.getenv("POPPLER_PATH", "")
+    tesseract_cmd: str = os.getenv("TESSERACT_CMD", "")
     tesseract_lang: str = os.getenv("TESSERACT_LANG", "vie")
     ocr_dpi: int = int(os.getenv("OCR_DPI", "300"))
 
-    # Rerank (Cross-Encoder local)
-    rerank_model: str = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
-    rerank_top_n: int = int(os.getenv("RERANK_TOP_N", "12"))
-    rerank_device: str = os.getenv("RERANK_DEVICE", "cpu")  # cpu | cuda
 
 settings = Settings()
