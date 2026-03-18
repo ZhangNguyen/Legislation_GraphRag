@@ -161,7 +161,7 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
             continue
 
         # 1.5) raw .doc/.docx -> extract to txt
-        if suf in {".doc", ".docx"}:
+        if suf in {".doc", ".docx"} or suf.startswith(".doc"):
             out_txt = cfg.normalized_dir / f"{fp.stem}.txt"
             if out_txt.exists() and out_txt.stat().st_size > 100:
                 print(f"[NORMALIZE] DOC exists -> skip: {out_txt.name}")
@@ -231,7 +231,7 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
             continue
 
         # ignore other files
-        print(f"[NORMALIZE] skip unsupported: {fp.name}")
+        print(f"[NORMALIZE] skip unsupported: {fp.name} (suffix={suf!r})")
         skipped_unsupported += 1
 
     print(
