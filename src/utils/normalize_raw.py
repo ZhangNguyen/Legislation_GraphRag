@@ -114,11 +114,10 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
     """
     Chuẩn hóa toàn bộ file trong data/raw sang data/normalized
 
-    Quy tắc:
-    - *.txt  -> copy nội dung đã normalize sang normalized/*.txt
-    - *.pdf  -> nếu extract được text thì ghi ra normalized/*.txt
-             -> nếu không extract được thì OCR ra normalized/*.txt
-    - giữ cấu trúc thư mục con nếu có
+    - If PDF has extractable text: optionally copy PDF -> normalized
+    - If PDF has no extractable text: OCR -> normalized/<same_name>.txt
+    - TXT in raw: copy to normalized
+    - DOC/DOCX in raw: extract text -> normalized/<same_name>.txt (requires parser/tool)
     """
     cfg = _build_runtime_cfg(cfg or OcrConfig())
 
@@ -143,10 +142,61 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
             print(f"[NORMALIZE] skip unsupported: {fp}")
             continue
 
-        out_txt = _to_normalized_txt_path(fp, cfg.raw_dir, cfg.normalized_dir)
+        # 1.5) raw .doc/.docx -> extract to txt
+        if suf in {".doc", ".docx"}:
+            out_txt = cfg.normalized_dir / f"{fp.stem}.txt"
+            if out_txt.exists() and out_txt.stat().st_size > 100:
+                print(f"[NORMALIZE] DOC exists -> skip: {out_txt.name}")
+                continue
 
-        if _should_skip_existing(out_txt, cfg.skip_if_exists_min_bytes):
-            print(f"[NORMALIZE] skip existing: {out_txt}")
+            try:
+                text = load_document(fp)
+            except Exception as e:
+                print(f"[NORMALIZE][WARN] {fp.name}: cannot extract DOC/DOCX -> skip. err={e}")
+                continue
+
+            if len(text.strip()) < cfg.min_text_len:
+                print(f"[NORMALIZE][WARN] {fp.name}: extracted text too short -> skip")
+                continue
+
+            out_txt.write_text(text, encoding="utf-8")
+            print(f"[NORMALIZE] extracted DOC/DOCX -> {out_txt}")
+            continue
+
+        # 2) raw .pdf
+        if suf == ".pdf":
+            # If already OCRed txt exists -> skip OCR
+            out_txt = cfg.normalized_dir / f"{fp.stem}.txt"
+            out_pdf = cfg.normalized_dir / fp.name
+
+            # Quick check: extract text via loader (pypdf)
+            try:
+                text = load_document(fp)  # uses pypdf for PDFs
+            except Exception as e:
+                print(f"[NORMALIZE][WARN] {fp.name}: load_document failed -> OCR fallback. err={e}")
+                text = ""
+
+            if len(text.strip()) >= cfg.min_text_len:
+                # This is a text PDF
+                if cfg.copy_text_pdf_to_normalized:
+                    if not out_pdf.exists():
+                        shutil.copy2(fp, out_pdf)
+                        print(f"[NORMALIZE] copied TEXT-PDF -> {out_pdf}")
+                else:
+                    # Or save extracted text as .txt (tuỳ bạn)
+                    if not out_txt.exists():
+                        out_txt.write_text(text, encoding="utf-8")
+                        print(f"[NORMALIZE] wrote extracted text -> {out_txt}")
+                continue
+
+            # No extractable text => OCR
+            if out_txt.exists() and out_txt.stat().st_size > 100:
+                print(f"[NORMALIZE] OCR exists -> skip: {out_txt.name}")
+                continue
+
+            print(f"[NORMALIZE] OCR start: {fp.name}")
+            _ocr_pdf_to_txt(fp, out_txt, cfg)
+            print(f"[NORMALIZE] OCR done -> {out_txt.name}")
             continue
 
         try:
