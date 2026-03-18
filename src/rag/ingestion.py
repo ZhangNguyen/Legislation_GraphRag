@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from qdrant_client.http import models as qm
 
 from src.rag.chunking_legal import LegalNode, build_chunks, parse_legal_text
 from src.rag.openai_clients import get_llm
+from src.storage.qdrant_store import get_qdrant_client, upsert_points
 
 # ============================================================
 # LLM PROMPTS
@@ -655,3 +658,56 @@ def ingest_document(text: str) -> Dict[str, Any]:
         "relations": all_relations,
         "graph_edges": graph_edges,
     }
+
+
+def upsert_chunks(
+    chunks: List[Dict[str, Any]],
+    *,
+    embeddings: Any,
+    meta: Optional[Dict[str, Any]] = None,
+) -> int:
+    """
+    Embed và upsert các chunk vào Qdrant.
+    - chunks: [{"text": "...", "metadata": {...}}, ...]
+    - meta: metadata mặc định ở mức document, merge vào metadata chunk.
+    """
+    if not chunks:
+        return 0
+
+    points: List[qm.PointStruct] = []
+    base_meta = dict(meta or {})
+
+    for idx, chunk in enumerate(chunks):
+        text = _norm_space(str(chunk.get("text") or ""))
+        if not text:
+            continue
+
+        chunk_meta = dict(chunk.get("metadata") or {})
+        merged_meta = {**base_meta, **chunk_meta}
+
+        chunk_id = str(merged_meta.get("chunk_id") or merged_meta.get("node_id") or f"chunk_{idx}")
+        merged_meta["chunk_id"] = chunk_id
+
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
+
+        vector = embeddings.embed_query(text)
+        payload = {
+            "text": text,
+            "metadata": merged_meta,
+            **merged_meta,
+        }
+
+        points.append(
+            qm.PointStruct(
+                id=point_id,
+                vector=vector,
+                payload=payload,
+            )
+        )
+
+    if not points:
+        return 0
+
+    client = get_qdrant_client()
+    upsert_points(client, points)
+    return len(points)
