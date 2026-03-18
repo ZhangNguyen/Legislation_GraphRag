@@ -8,7 +8,7 @@ from src.rag.auto_filter import infer_filters
 from src.rag.bm25_corpus import load_bm25_stats
 from src.rag.hybrid import hybrid_rank
 from src.rag.legal_versioning import annotate_graph_with_versioning
-from src.rag.openai_clients import get_embedings
+from src.rag.openai_clients import get_embedings, get_llm
 from src.rag.rerank_cross import cross_rerank
 from src.storage.qdrant_store import get_qdrant_client, search_qdrant
 
@@ -176,6 +176,38 @@ def _embed_query(question: str) -> List[float]:
     return embeddings.embed_query(question)
 
 
+def generate_query_variants(question: str, *, n: int = 3) -> List[str]:
+    """
+    Sinh thêm các biến thể của câu hỏi người dùng trước khi tính similarity.
+    Fallback về câu hỏi gốc nếu LLM fail.
+    """
+    q = (question or "").strip()
+    if not q:
+        return []
+
+    try:
+        llm = get_llm()
+        prompt = (
+            f"Sinh {n} câu hỏi biến thể tiếng Việt có cùng ý nghĩa pháp lý với câu hỏi sau. "
+            "Mỗi câu 1 dòng, không đánh số, không giải thích.\n\n"
+            f"QUESTION: {q}"
+        )
+        response = llm.invoke(prompt)
+        lines = [str(x).strip(" -\t") for x in str(getattr(response, "content", "") or "").splitlines()]
+        variants = [x for x in lines if x]
+    except Exception:
+        variants = []
+
+    merged = [q]
+    for v in variants:
+        if v.lower() not in {x.lower() for x in merged}:
+            merged.append(v)
+        if len(merged) >= n + 1:
+            break
+
+    return merged
+
+
 def _extract_node_id_from_payload(payload: Dict[str, Any]) -> Optional[str]:
     if not payload:
         return None
@@ -227,7 +259,16 @@ def retrieve_seed_candidates(
     if filters:
         merged_filters.update({k: v for k, v in filters.items() if v is not None and v != ""})
 
-    query_vector = _embed_query(question)
+    expanded_questions = generate_query_variants(question, n=3)
+    embeddings = get_embedings()
+    vectors = [embeddings.embed_query(q) for q in expanded_questions] or [embeddings.embed_query(question)]
+    dims = len(vectors[0]) if vectors and vectors[0] else 0
+    query_vector = [0.0] * dims
+    for vec in vectors:
+        for i, v in enumerate(vec):
+            query_vector[i] += float(v)
+    query_vector = [v / float(len(vectors)) for v in query_vector]
+
     client = get_qdrant_client()
 
     raw_points = search_qdrant(
@@ -253,6 +294,7 @@ def retrieve_seed_candidates(
     for rank_score, cand in ranked:
         item = dict(cand)
         item["hybrid_score"] = float(rank_score)
+        item["query_variants"] = expanded_questions
         out.append(item)
 
     return out

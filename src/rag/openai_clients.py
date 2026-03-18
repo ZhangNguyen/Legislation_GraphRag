@@ -9,10 +9,9 @@ def get_llm() -> ChatOpenAI:
 def get_embedings() -> OpenAIEmbeddings:
     if not settings.openai_api_key:
         raise ValueError("Missing api key OPENAI")
-    return OpenAIEmbeddings(model=settings.openai_embeding_model,api_key=settings.openai_api_key)
+    return OpenAIEmbeddings(model=settings.openai_embed_model,api_key=settings.openai_api_key)
 
 def get_embeding_dim(emb: OpenAIEmbeddings) -> int:
     # gọi để biết dimension
     v = emb.embed_query("dim_check")
     return len(v)
-

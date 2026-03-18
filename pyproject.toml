@@ -23,6 +23,7 @@ dependencies = [
 
     # Data loading
     "pypdf>=3.0.0",
+    "python-docx>=1.1.0",
 
     # OCR pipeline
     "ocrmypdf>=13.0.0",

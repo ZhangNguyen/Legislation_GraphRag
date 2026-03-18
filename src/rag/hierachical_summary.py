@@ -48,3 +48,30 @@ CHANGE_ROLES = {
     "replacement",
 }
 _SUMMARY_CACHE: Dict[str, str] = {}
+
+
+def build_hierarchical_summaries(
+    graph: Dict[str, Any],
+    document_title: Optional[str] = None,
+    *,
+    include_clause: bool = False,
+    include_article: bool = True,
+    include_change: bool = True,
+    include_community: bool = False,
+) -> Dict[str, Any]:
+    """
+    Fallback no-op builder để giữ compatibility cho runtime.
+    Hiện tại trả lại graph gốc; các summary node đã có thể được tạo từ ingestion.
+    """
+    _ = (
+        document_title,
+        include_clause,
+        include_article,
+        include_change,
+        include_community,
+    )
+    return {
+        "graph": graph,
+        "summary_nodes": [],
+        "summary_edges": [],
+    }
