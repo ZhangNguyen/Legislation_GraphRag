@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+from typing import List
 from pydantic import BaseModel
 
 
-def _split_csv(raw: str) -> list[str]:
+def _split_csv(raw: str) -> List[str]:
     raw = (raw or "").strip()
     if not raw:
         return ["*"]
@@ -48,7 +49,7 @@ class Settings(BaseModel):
     # Web
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
     app_port: int = int(os.getenv("APP_PORT", "8000"))
-    cors_origins: list[str] = _split_csv(os.getenv("CORS_ORIGINS", "*"))
+    cors_origins: List[str] = _split_csv(os.getenv("CORS_ORIGINS", "*"))
 
     # OCR vẫn giữ nhưng không dùng trong luồng chạy hiện tại
     poppler_path: str = os.getenv("POPPLER_PATH", "")
