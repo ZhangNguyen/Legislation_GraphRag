@@ -61,8 +61,16 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
     - If PDF has extractable text: optionally copy PDF -> normalized
     - If PDF has no extractable text: OCR -> normalized/<same_name>.txt
     - TXT in raw: copy to normalized
+    - DOC/DOCX in raw: extract text -> normalized/<same_name>.txt (requires parser/tool)
     """
     cfg = cfg or OcrConfig()
+    copied_txt = 0
+    extracted_doc = 0
+    copied_pdf = 0
+    ocr_pdf = 0
+    skipped_unsupported = 0
+    skipped_existing = 0
+    doc_extract_failed = 0
 
     cfg.normalized_dir.mkdir(parents=True, exist_ok=True)
     if not cfg.raw_dir.exists():
@@ -72,6 +80,9 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
     if not raw_files:
         print(f"[NORMALIZE] No files in {cfg.raw_dir}")
         return
+    print(f"[NORMALIZE] raw_dir={cfg.raw_dir}")
+    print(f"[NORMALIZE] normalized_dir={cfg.normalized_dir}")
+    print(f"[NORMALIZE] total_files={len(raw_files)}")
 
     # Allow override by ENV for deploy later (không bắt buộc)
     poppler_path = os.getenv("POPPLER_PATH", cfg.poppler_path)
@@ -99,6 +110,34 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
             if not out_txt.exists():
                 shutil.copy2(fp, out_txt)
                 print(f"[NORMALIZE] copied TXT -> {out_txt}")
+                copied_txt += 1
+            else:
+                skipped_existing += 1
+                print(f"[NORMALIZE] skip existing: {out_txt}")
+            continue
+
+        # 1.5) raw .doc/.docx -> extract to txt
+        if suf in {".doc", ".docx"} or suf.startswith(".doc"):
+            out_txt = cfg.normalized_dir / f"{fp.stem}.txt"
+            if out_txt.exists() and out_txt.stat().st_size > 100:
+                print(f"[NORMALIZE] DOC exists -> skip: {out_txt.name}")
+                skipped_existing += 1
+                continue
+
+            try:
+                text = load_document(fp)
+            except Exception as e:
+                print(f"[NORMALIZE][WARN] {fp.name}: cannot extract DOC/DOCX -> skip. err={e}")
+                doc_extract_failed += 1
+                continue
+
+            if len(text.strip()) < cfg.min_text_len:
+                print(f"[NORMALIZE][WARN] {fp.name}: extracted text too short -> skip")
+                continue
+
+            out_txt.write_text(text, encoding="utf-8")
+            print(f"[NORMALIZE] extracted DOC/DOCX -> {out_txt}")
+            extracted_doc += 1
             continue
 
         # 2) raw .pdf
@@ -120,22 +159,44 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
                     if not out_pdf.exists():
                         shutil.copy2(fp, out_pdf)
                         print(f"[NORMALIZE] copied TEXT-PDF -> {out_pdf}")
+                        copied_pdf += 1
+                    else:
+                        skipped_existing += 1
+                        print(f"[NORMALIZE] skip existing: {out_pdf}")
                 else:
                     # Or save extracted text as .txt (tuỳ bạn)
                     if not out_txt.exists():
                         out_txt.write_text(text, encoding="utf-8")
                         print(f"[NORMALIZE] wrote extracted text -> {out_txt}")
+                        copied_pdf += 1
+                    else:
+                        skipped_existing += 1
+                        print(f"[NORMALIZE] skip existing: {out_txt}")
                 continue
 
             # No extractable text => OCR
             if out_txt.exists() and out_txt.stat().st_size > 100:
                 print(f"[NORMALIZE] OCR exists -> skip: {out_txt.name}")
+                skipped_existing += 1
                 continue
 
             print(f"[NORMALIZE] OCR start: {fp.name}")
             _ocr_pdf_to_txt(fp, out_txt, cfg)
             print(f"[NORMALIZE] OCR done -> {out_txt.name}")
+            ocr_pdf += 1
             continue
 
         # ignore other files
-        print(f"[NORMALIZE] skip unsupported: {fp.name}")
+        print(f"[NORMALIZE] skip unsupported: {fp.name} (suffix={suf!r})")
+        skipped_unsupported += 1
+
+    print(
+        "[NORMALIZE] summary:",
+        f"copied_txt={copied_txt},",
+        f"extracted_doc={extracted_doc},",
+        f"copied_pdf={copied_pdf},",
+        f"ocr_pdf={ocr_pdf},",
+        f"skipped_existing={skipped_existing},",
+        f"skipped_unsupported={skipped_unsupported},",
+        f"doc_extract_failed={doc_extract_failed}",
+    )
