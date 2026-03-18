@@ -190,10 +190,7 @@ def build_runtime_graph(
         doc_title = fp.stem
         doc_prefix = _slugify(doc_title)
 
-        ingestion_output = ingest_document(
-            text=text,
-            document_title=doc_title,
-        )
+        ingestion_output = ingest_document(text=text)
 
         graph = materialize_graph_from_ingestion(ingestion_output)
         graph = build_hierarchical_summaries(
