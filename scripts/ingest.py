@@ -99,7 +99,7 @@ from src.rag.chunking_legal import legal_chunk
 from src.rag.ingestion import upsert_chunks
 from src.storage.qdrant_store import ensure_collection, get_qdrant_client
 from src.utils.loader import load_document
-from src.utils.normalize_raw import normalize_raw_to_normalized
+from src.utils.normalize_raw import OcrConfig, normalize_raw_to_normalized
 
 try:
     from src.rag.chunking_legal import semantic_merge_safe
@@ -127,6 +127,41 @@ def _prefix_chunks(chunks: list[dict], doc_prefix: str) -> list[dict]:
     return out
 
 
+def _backfill_doc_raw_to_normalized() -> None:
+    """
+    Safety net:
+    Nếu normalize pipeline cũ vẫn skip .doc/.docx ở một số máy, ta chủ động
+    trích xuất Word files từ raw -> normalized/<stem>.txt trước khi ingest.
+    """
+    cfg = OcrConfig()
+    raw_dir = cfg.raw_dir
+    normalized_dir = cfg.normalized_dir
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+
+    for fp in sorted(raw_dir.glob("*.*")):
+        suf = fp.suffix.lower()
+        if not (suf.startswith(".doc")):
+            continue
+
+        out_txt = normalized_dir / f"{fp.stem}.txt"
+        if out_txt.exists() and out_txt.stat().st_size > 100:
+            continue
+
+        try:
+            text = load_document(fp)
+        except Exception as e:
+            print(f"[DOC-FALLBACK][WARN] {fp.name}: cannot convert -> {e}")
+            continue
+
+        text = (text or "").strip()
+        if len(text) < 50:
+            print(f"[DOC-FALLBACK][WARN] {fp.name}: extracted text too short")
+            continue
+
+        out_txt.write_text(text, encoding="utf-8")
+        print(f"[DOC-FALLBACK] extracted -> {out_txt}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ingest legal documents into Qdrant (NO OCR).")
     parser.add_argument(
@@ -148,6 +183,7 @@ def main():
 
     if args.normalize:
         normalize_raw_to_normalized()
+        _backfill_doc_raw_to_normalized()
 
     input_dir = Path(args.input_dir)
     if not input_dir.exists():
