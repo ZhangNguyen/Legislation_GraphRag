@@ -10,14 +10,17 @@ os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
 os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
-from src.app.runtime import build_runtime_graph, get_runtime_status
-
 
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
+    logger = logging.getLogger(__name__)
+    logger.info("build_graph CLI started")
+
+    # Import trễ để đảm bảo logger đã bật trước khi runtime bắt đầu làm việc.
+    from src.app.runtime import build_runtime_graph, get_runtime_status
 
     parser = argparse.ArgumentParser(description="Build runtime graph before starting server.")
     parser.add_argument("--input_dir", type=str, default=None)
