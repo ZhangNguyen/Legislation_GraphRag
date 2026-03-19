@@ -30,6 +30,7 @@ class Settings(BaseModel):
     # Corpus
     normalized_dir: str = os.getenv("NORMALIZED_DIR", "data/normalized")
     normalized_glob: str = os.getenv("NORMALIZED_GLOB", "*.*")
+    graph_snapshot_path: str = os.getenv("GRAPH_SNAPSHOT_PATH", "outputs/runtime/runtime_graph_snapshot.json")
 
     # Retrieval
     qdrant_top_k: int = int(os.getenv("QDRANT_TOP_K", "30"))

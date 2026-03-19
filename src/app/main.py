@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 
 from src.app.api.router import api_router
+from src.app.runtime import preload_runtime_graph_from_snapshot
 from src.app.settings import settings
 
 app = FastAPI(title="Legislation RAG", version="0.2.0")
@@ -37,3 +38,8 @@ def health():
         "status": "ok",
         "collection": settings.qdrant_collection,
     }
+
+
+@app.on_event("startup")
+def startup_preload_graph_snapshot() -> None:
+    preload_runtime_graph_from_snapshot()

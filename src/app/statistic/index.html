@@ -132,6 +132,7 @@
           <h3>Runtime / Graph</h3>
           <button onclick="adminStatus()">/api/admin/status</button>
           <button class="success" onclick="adminReloadGraph()">/api/admin/reload-graph</button>
+          <button onclick="adminSaveSnapshot()">/api/admin/save-snapshot</button>
           <button onclick="adminVersioning()">/api/admin/versioning</button>
         </div>
 
@@ -250,6 +251,10 @@
     async function adminVersioning() {
       const res = await fetch('/api/admin/versioning?limit=20');
       printAdmin(await res.json());
+    }
+
+    async function adminSaveSnapshot() {
+      printAdmin(await postJson('/api/admin/save-snapshot', {}));
     }
 
     async function ingestReindex() {
