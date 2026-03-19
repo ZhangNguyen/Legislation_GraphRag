@@ -4,7 +4,12 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
 
-from src.app.runtime import build_runtime_graph, ensure_runtime_graph, get_runtime_status
+from src.app.runtime import (
+    build_runtime_graph,
+    ensure_runtime_graph,
+    get_runtime_status,
+    save_current_runtime_graph_snapshot,
+)
 from src.rag.legal_versioning import summarize_versioning
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -36,3 +41,10 @@ def versioning_preview(limit: int = 20) -> Dict[str, Any]:
         "count": len(rows),
         "items": rows[:limit],
     }
+
+
+@router.post("/save-snapshot")
+def save_snapshot(force_build: bool = False) -> Dict[str, Any]:
+    result = save_current_runtime_graph_snapshot(force_build=force_build)
+    result["status"] = get_runtime_status()
+    return result
