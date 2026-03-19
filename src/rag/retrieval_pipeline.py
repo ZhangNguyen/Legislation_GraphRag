@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 from collections import deque
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.app.settings import settings
 from src.rag.auto_filter import infer_filters
@@ -69,6 +72,21 @@ EFFECTIVE_KEYWORDS = [
 ]
 
 _BM25_CACHE: Dict[str, Any] = {}
+
+QUERY_EXPANSION_SYSTEM_PROMPT = """
+Bạn là bộ mở rộng truy vấn pháp luật cho GraphRAG Việt Nam.
+
+Nhiệm vụ:
+- Sinh các câu hỏi tương đương/biến thể để tăng recall truy xuất vector.
+- Giữ nguyên ý nghĩa pháp lý cốt lõi của câu hỏi gốc.
+- Ưu tiên biến thể theo các góc nhìn: điều khoản áp dụng, chủ thể, hành vi, chế tài, hiệu lực/sửa đổi (nếu có liên quan).
+- Không tự thêm thông tin mới không có trong câu hỏi gốc.
+
+Trả về JSON hợp lệ, không markdown, theo schema:
+{
+  "queries": ["...", "..."]
+}
+""".strip()
 
 
 def get_bm25_stats_cached(path: str) -> Dict[str, Any]:
@@ -185,16 +203,33 @@ def generate_query_variants(question: str, *, n: int = 3) -> List[str]:
     if not q:
         return []
 
+    variants: List[str] = []
     try:
         llm = get_llm()
-        prompt = (
-            f"Sinh {n} câu hỏi biến thể tiếng Việt có cùng ý nghĩa pháp lý với câu hỏi sau. "
-            "Mỗi câu 1 dòng, không đánh số, không giải thích.\n\n"
-            f"QUESTION: {q}"
+        response = llm.invoke(
+            [
+                SystemMessage(content=QUERY_EXPANSION_SYSTEM_PROMPT),
+                HumanMessage(
+                    content=(
+                        f"Sinh tối đa {n} câu hỏi biến thể cho câu hỏi sau.\n"
+                        f"Câu hỏi gốc: {q}"
+                    )
+                ),
+            ]
         )
-        response = llm.invoke(prompt)
-        lines = [str(x).strip(" -\t") for x in str(getattr(response, "content", "") or "").splitlines()]
-        variants = [x for x in lines if x]
+        raw = str(getattr(response, "content", "") or "").strip()
+        if raw.startswith("```"):
+            lines = raw.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            if lines and lines[0].strip().lower() == "json":
+                lines = lines[1:]
+            raw = "\n".join(lines).strip()
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict) and isinstance(parsed.get("queries"), list):
+            variants = [str(x).strip() for x in parsed["queries"] if str(x).strip()]
     except Exception:
         variants = []
 
