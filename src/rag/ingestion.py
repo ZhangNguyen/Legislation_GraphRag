@@ -645,7 +645,8 @@ def ingest_document(text: str) -> Dict[str, Any]:
     graph_nodes = build_graph_nodes(parsed_nodes, entities_by_node, relations_by_node)
     entity_nodes = build_entity_nodes(all_entities)
     graph_edges = build_graph_edges(parsed_nodes, all_entities, all_relations, entities_by_node)
-    summary_nodes = build_article_summaries(parsed_nodes)
+    # Summary nodes will be generated later by hierarchical_summary.py
+    summary_nodes: List[Dict[str, Any]] = []
     chunks = build_chunks(parsed_nodes)
 
     return {
