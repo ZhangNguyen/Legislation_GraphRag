@@ -126,6 +126,21 @@ def _safe_json_loads(text: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
 def _norm_space(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
 
+
+def safe_text(x: Any) -> str:
+    """
+    Ensure the embedding input is a JSON-serializable plain str.
+    Decodes bytes, converts Path/other types, and strips nulls.
+    """
+    if x is None:
+        return ""
+    if isinstance(x, bytes):
+        x = x.decode("utf-8", errors="ignore")
+    if not isinstance(x, str):
+        x = str(x)
+    return x.replace("\x00", "")
+
+
 def _unique_dicts(items: List[Dict[str, Any]], keys: List[str]) -> List[Dict[str, Any]]:
     seen = set()
     out: List[Dict[str, Any]] = []
@@ -683,7 +698,7 @@ def upsert_chunks(
 
     def _sanitize_embedding_text(value: str) -> str:
         # Tránh ký tự control / surrogate gây lỗi encode JSON ở HTTP client.
-        cleaned = str(value or "").replace("\x00", " ")
+        cleaned = safe_text(value).replace("\x00", " ")
         cleaned = "".join(ch if (ch == "\n" or ch == "\t" or ord(ch) >= 32) else " " for ch in cleaned)
         cleaned = cleaned.encode("utf-8", "ignore").decode("utf-8", "ignore")
         return _norm_space(cleaned)
@@ -715,7 +730,7 @@ def upsert_chunks(
         return None
 
     for idx, chunk in enumerate(chunks):
-        text = _norm_space(str(chunk.get("text") or ""))
+        text = _norm_space(safe_text(chunk.get("text")))
         if not text:
             continue
 
