@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -11,6 +12,8 @@ from qdrant_client.http import models as qm
 from src.rag.chunking_legal import LegalNode, build_chunks, parse_legal_text
 from src.rag.openai_clients import get_llm
 from src.storage.qdrant_store import get_qdrant_client, upsert_points
+
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # LLM PROMPTS
@@ -122,6 +125,21 @@ def _safe_json_loads(text: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
 
 def _norm_space(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
+
+
+def safe_text(x: Any) -> str:
+    """
+    Ensure the embedding input is a JSON-serializable plain str.
+    Decodes bytes, converts Path/other types, and strips nulls.
+    """
+    if x is None:
+        return ""
+    if isinstance(x, bytes):
+        x = x.decode("utf-8", errors="ignore")
+    if not isinstance(x, str):
+        x = str(x)
+    return x.replace("\x00", "")
+
 
 def _unique_dicts(items: List[Dict[str, Any]], keys: List[str]) -> List[Dict[str, Any]]:
     seen = set()
@@ -645,7 +663,8 @@ def ingest_document(text: str) -> Dict[str, Any]:
     graph_nodes = build_graph_nodes(parsed_nodes, entities_by_node, relations_by_node)
     entity_nodes = build_entity_nodes(all_entities)
     graph_edges = build_graph_edges(parsed_nodes, all_entities, all_relations, entities_by_node)
-    summary_nodes = build_article_summaries(parsed_nodes)
+    # Summary nodes will be generated later by hierarchical_summary.py
+    summary_nodes: List[Dict[str, Any]] = []
     chunks = build_chunks(parsed_nodes)
 
     return {
@@ -677,8 +696,41 @@ def upsert_chunks(
     points: List[qm.PointStruct] = []
     base_meta = dict(meta or {})
 
+    def _sanitize_embedding_text(value: str) -> str:
+        # Tránh ký tự control / surrogate gây lỗi encode JSON ở HTTP client.
+        cleaned = safe_text(value).replace("\x00", " ")
+        cleaned = "".join(ch if (ch == "\n" or ch == "\t" or ord(ch) >= 32) else " " for ch in cleaned)
+        cleaned = cleaned.encode("utf-8", "ignore").decode("utf-8", "ignore")
+        return _norm_space(cleaned)
+
+    def _embed_safe(value: str, *, chunk_id: str) -> Optional[List[float]]:
+        candidates = [
+            _norm_space(value),
+            _sanitize_embedding_text(value),
+        ]
+        # Retry cuối cùng: truncate để tránh payload quá lớn / ký tự lạ cuối chuỗi.
+        if candidates[-1]:
+            candidates.append(candidates[-1][:7000])
+
+        tried = set()
+        for text_candidate in candidates:
+            key = text_candidate
+            if not key or key in tried:
+                continue
+            tried.add(key)
+            try:
+                return embeddings.embed_query(text_candidate)
+            except Exception as exc:
+                logger.warning(
+                    "Embedding failed for chunk_id=%s (len=%s): %s",
+                    chunk_id,
+                    len(text_candidate),
+                    exc,
+                )
+        return None
+
     for idx, chunk in enumerate(chunks):
-        text = _norm_space(str(chunk.get("text") or ""))
+        text = _norm_space(safe_text(chunk.get("text")))
         if not text:
             continue
 
@@ -690,7 +742,10 @@ def upsert_chunks(
 
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
 
-        vector = embeddings.embed_query(text)
+        vector = _embed_safe(text, chunk_id=chunk_id)
+        if not vector:
+            logger.error("Skip chunk due to embedding failure: chunk_id=%s", chunk_id)
+            continue
         payload = {
             "text": text,
             "metadata": merged_meta,
