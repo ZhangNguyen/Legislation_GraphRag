@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from src.app.api.router import api_router
 from src.app.settings import settings
@@ -19,9 +21,13 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api")
 
+UI_INDEX = Path(__file__).resolve().parent / "statistic" / "index.html"
+
 
 @app.get("/")
 def root():
+    if UI_INDEX.exists():
+        return FileResponse(UI_INDEX)
     return RedirectResponse(url="/docs")
 
 
