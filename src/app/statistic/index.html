@@ -2,95 +2,286 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <title>Legislation RAG</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legislation RAG UI</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 980px; margin: 24px auto; padding: 0 16px; }
-    textarea, input { width: 100%; padding: 10px; margin: 8px 0; }
-    button { padding: 10px 14px; margin-right: 8px; cursor: pointer; }
-    pre { background: #f5f5f5; padding: 12px; overflow: auto; white-space: pre-wrap; }
-    .row { display: flex; gap: 12px; }
-    .col { flex: 1; }
-    .card { border: 1px solid #ddd; padding: 12px; margin-top: 12px; border-radius: 8px; }
+    :root {
+      --bg: #0b1020;
+      --card: #141b2d;
+      --muted: #9aa4bf;
+      --text: #eef2ff;
+      --accent: #5b8cff;
+      --accent-2: #27c59a;
+      --danger: #ff6b6b;
+      --border: #2a3555;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: radial-gradient(circle at top, #121a33 0%, var(--bg) 45%);
+      color: var(--text);
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; }
+    h1, h2, h3 { margin: 0 0 10px; }
+    .subtitle { color: var(--muted); margin-bottom: 16px; }
+    .grid { display: grid; gap: 12px; }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .card {
+      background: rgba(20, 27, 45, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+    .role-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+    button {
+      border: 1px solid var(--border);
+      background: #1f2a44;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.primary { background: var(--accent); border-color: transparent; }
+    button.success { background: var(--accent-2); border-color: transparent; }
+    button.danger { background: var(--danger); border-color: transparent; }
+    button.ghost { background: transparent; }
+    input, textarea {
+      width: 100%;
+      margin-top: 8px;
+      margin-bottom: 10px;
+      background: #0f1629;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    textarea { min-height: 110px; }
+    pre {
+      background: #0f1629;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      white-space: pre-wrap;
+      overflow: auto;
+      max-height: 360px;
+      margin: 0;
+    }
+    .hidden { display: none; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .tag { display: inline-block; border: 1px solid var(--border); padding: 4px 8px; border-radius: 999px; color: var(--muted); }
+    .chat-thread { display: flex; flex-direction: column; gap: 10px; max-height: 460px; overflow: auto; }
+    .msg { border-radius: 12px; padding: 10px 12px; max-width: 90%; line-height: 1.45; }
+    .msg-user { align-self: flex-end; background: #29407a; border: 1px solid #3f5fb0; }
+    .msg-bot { align-self: flex-start; background: #15213b; border: 1px solid var(--border); }
+    .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
   </style>
 </head>
 <body>
-  <h1>Legislation RAG</h1>
+  <div class="container">
+    <h1>Legislation GraphRAG</h1>
+    <p class="subtitle">Chọn vai trò để vào giao diện phù hợp.</p>
 
-  <div class="card">
-    <h3>Chat</h3>
-    <textarea id="question" rows="4" placeholder="Nhập câu hỏi pháp luật..."></textarea>
+    <div id="landing" class="card">
+      <h2>Bạn là ai?</h2>
+      <div class="role-btns">
+        <button class="primary" onclick="openRole('user')">Vào trang User</button>
+        <button onclick="openRole('admin')">Vào trang Admin</button>
+      </div>
+      <p class="subtitle" style="margin-top:12px;">User chỉ chat. Admin có đầy đủ công cụ vận hành.</p>
+    </div>
 
-    <div class="row">
-      <div class="col">
-        <input id="qdrant_top_k" type="number" value="30" placeholder="Qdrant top k">
+    <div id="userPanel" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <h2>User Chat</h2>
+          <div>
+            <span class="tag">User mode</span>
+            <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
+          </div>
+        </div>
+        <p class="subtitle">Chỉ nhập câu hỏi pháp luật. Các tham số retrieval dùng cấu hình server (.env).</p>
+
+        <label for="userQuestion">Câu hỏi</label>
+        <textarea id="userQuestion" placeholder="Ví dụ: Điều kiện xử phạt theo Điều 77 là gì?"></textarea>
+        <button class="primary" onclick="sendUserChat()">Gửi câu hỏi</button>
       </div>
-      <div class="col">
-        <input id="final_top_k" type="number" value="15" placeholder="Final top k">
-      </div>
-      <div class="col">
-        <input id="cross_top_k" type="number" value="8" placeholder="Cross top k">
+
+      <div class="card">
+        <h3>Hội thoại</h3>
+        <div id="userChatThread" class="chat-thread"></div>
       </div>
     </div>
 
-    <button onclick="sendChat()">Gửi câu hỏi</button>
-    <button onclick="reloadGraph()">Reload graph</button>
-    <button onclick="rebuildAll()">Rebuild all</button>
-  </div>
+    <div id="adminPanel" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <h2>Admin Console</h2>
+          <div>
+            <span class="tag">Admin mode</span>
+            <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
+          </div>
+        </div>
+        <p class="subtitle">Dùng đầy đủ API quản trị: status, reload graph, reindex/rebuild, versioning, benchmark, chat debug.</p>
+      </div>
 
-  <div class="card">
-    <h3>Answer</h3>
-    <pre id="answer"></pre>
-  </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>Runtime / Graph</h3>
+          <button onclick="adminStatus()">/api/admin/status</button>
+          <button class="success" onclick="adminReloadGraph()">/api/admin/reload-graph</button>
+          <button onclick="adminVersioning()">/api/admin/versioning</button>
+        </div>
 
-  <div class="card">
-    <h3>Sources</h3>
-    <pre id="sources"></pre>
-  </div>
+        <div class="card">
+          <h3>Ingest</h3>
+          <button onclick="ingestReindex()">/api/ingest/reindex</button>
+          <button class="success" onclick="ingestRebuildAll()">/api/ingest/rebuild-all</button>
+        </div>
+      </div>
 
-  <div class="card">
-    <h3>Debug / Timings</h3>
-    <pre id="debug"></pre>
+      <div class="card">
+        <h3>Admin Chat (debug)</h3>
+        <textarea id="adminQuestion" placeholder="Nhập câu hỏi để test retrieval + debug..."></textarea>
+        <div class="row">
+          <button class="primary" onclick="sendAdminChat()">Gửi /api/chat (debug)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Benchmark Evaluate</h3>
+        <label>Câu hỏi</label>
+        <input id="benchQuestion" placeholder="Câu hỏi benchmark" />
+        <label>Answer</label>
+        <textarea id="benchAnswer" placeholder="Câu trả lời từ hệ thống"></textarea>
+        <label>Reference answer (optional)</label>
+        <textarea id="benchRef" placeholder="Đáp án chuẩn (nếu có)"></textarea>
+        <label>Contexts (mỗi dòng là 1 context)</label>
+        <textarea id="benchContexts" placeholder="Context 1\nContext 2"></textarea>
+        <button onclick="runBenchmark()">/api/benchmark/evaluate</button>
+      </div>
+
+      <div class="card">
+        <h3>Admin Output</h3>
+        <pre id="adminOutput"></pre>
+      </div>
+    </div>
   </div>
 
   <script>
-    async function sendChat() {
-      const body = {
-        question: document.getElementById("question").value,
-        qdrant_top_k: Number(document.getElementById("qdrant_top_k").value || 30),
-        final_top_k: Number(document.getElementById("final_top_k").value || 15),
-        cross_top_k: Number(document.getElementById("cross_top_k").value || 8),
-        include_debug: true
-      };
-
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-
-      document.getElementById("answer").textContent = data.answer || "";
-      document.getElementById("sources").textContent = JSON.stringify(data.sources || [], null, 2);
-      document.getElementById("debug").textContent = JSON.stringify({
-        timings_ms: data.timings_ms,
-        debug: data.debug
-      }, null, 2);
+    function openRole(role) {
+      document.getElementById('landing').classList.add('hidden');
+      document.getElementById('userPanel').classList.toggle('hidden', role !== 'user');
+      document.getElementById('adminPanel').classList.toggle('hidden', role !== 'admin');
     }
 
-    async function reloadGraph() {
-      const res = await fetch("/api/admin/reload-graph", { method: "POST" });
-      const data = await res.json();
-      document.getElementById("debug").textContent = JSON.stringify(data, null, 2);
+    function backToLanding() {
+      document.getElementById('landing').classList.remove('hidden');
+      document.getElementById('userPanel').classList.add('hidden');
+      document.getElementById('adminPanel').classList.add('hidden');
     }
 
-    async function rebuildAll() {
-      const res = await fetch("/api/ingest/rebuild-all", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
+    async function postJson(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
       });
-      const data = await res.json();
-      document.getElementById("debug").textContent = JSON.stringify(data, null, 2);
+      return await res.json();
+    }
+
+    function printAdmin(data) {
+      document.getElementById('adminOutput').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function sendUserChat() {
+      const question = document.getElementById('userQuestion').value.trim();
+      if (!question) return;
+
+      const thread = document.getElementById('userChatThread');
+      const userNode = document.createElement('div');
+      userNode.className = 'msg msg-user';
+      userNode.textContent = question;
+      thread.appendChild(userNode);
+
+      const botNode = document.createElement('div');
+      botNode.className = 'msg msg-bot';
+      botNode.textContent = 'Đang xử lý...';
+      thread.appendChild(botNode);
+      thread.scrollTop = thread.scrollHeight;
+
+      const data = await postJson('/api/chat', {
+        question,
+        include_debug: false,
+      });
+
+      const answer = data.answer || '(không có nội dung trả lời)';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent =
+        `Nguồn: ${(data.sources || []).length} | Timing: ${JSON.stringify(data.timings_ms || {})}`;
+
+      botNode.textContent = answer;
+      botNode.appendChild(meta);
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    async function sendAdminChat() {
+      const question = document.getElementById('adminQuestion').value.trim();
+      if (!question) return;
+      const data = await postJson('/api/chat', {
+        question,
+        include_debug: true,
+      });
+      printAdmin(data);
+    }
+
+    async function adminStatus() {
+      const res = await fetch('/api/admin/status');
+      printAdmin(await res.json());
+    }
+
+    async function adminReloadGraph() {
+      printAdmin(await postJson('/api/admin/reload-graph', {}));
+    }
+
+    async function adminVersioning() {
+      const res = await fetch('/api/admin/versioning?limit=20');
+      printAdmin(await res.json());
+    }
+
+    async function ingestReindex() {
+      printAdmin(await postJson('/api/ingest/reindex', {}));
+    }
+
+    async function ingestRebuildAll() {
+      printAdmin(await postJson('/api/ingest/rebuild-all', {}));
+    }
+
+    async function runBenchmark() {
+      const question = document.getElementById('benchQuestion').value.trim();
+      const answer = document.getElementById('benchAnswer').value.trim();
+      const reference_answer = document.getElementById('benchRef').value.trim();
+      const contexts = document.getElementById('benchContexts').value
+        .split('\n')
+        .map(x => x.trim())
+        .filter(Boolean);
+
+      if (!question || !answer) {
+        alert('Benchmark cần ít nhất question + answer');
+        return;
+      }
+
+      const data = await postJson('/api/benchmark/evaluate', {
+        question,
+        answer,
+        contexts,
+        reference_answer: reference_answer || null,
+        n_generated_questions: 3,
+      });
+      printAdmin(data);
     }
   </script>
 </body>

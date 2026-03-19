@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 from qdrant_client import QdrantClient
@@ -61,10 +62,49 @@ def upsert_points(
     if not points:
         return
 
-    client.upsert(
-        collection_name=settings.qdrant_collection,
-        points=points,
-    )
+    # Qdrant HTTP giới hạn payload request (mặc định thường ~32MB).
+    # Chia batch để tránh lỗi 400 "JSON payload ... is larger than allowed".
+    max_batch_bytes = 8 * 1024 * 1024  # 8MB an toàn hơn nhiều so với giới hạn 32MB
+    max_batch_points = 256
+
+    def _estimate_point_bytes(p: qm.PointStruct) -> int:
+        payload = getattr(p, "payload", {}) or {}
+        try:
+            payload_bytes = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+        except Exception:
+            payload_bytes = 0
+
+        vec = getattr(p, "vector", None)
+        if isinstance(vec, list):
+            vector_bytes = len(vec) * 4  # float32 xấp xỉ
+        else:
+            vector_bytes = 0
+
+        # overhead JSON + id + keys
+        return payload_bytes + vector_bytes + 2048
+
+    batch: List[qm.PointStruct] = []
+    batch_bytes = 0
+
+    for p in points:
+        p_bytes = _estimate_point_bytes(p)
+
+        if batch and (batch_bytes + p_bytes > max_batch_bytes or len(batch) >= max_batch_points):
+            client.upsert(
+                collection_name=settings.qdrant_collection,
+                points=batch,
+            )
+            batch = []
+            batch_bytes = 0
+
+        batch.append(p)
+        batch_bytes += p_bytes
+
+    if batch:
+        client.upsert(
+            collection_name=settings.qdrant_collection,
+            points=batch,
+        )
 
 
 def search_qdrant(
