@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -14,7 +13,6 @@ from src.utils.loader import load_document, normalize_text
 
 @dataclass(frozen=True)
 class OcrConfig:
-    # Có thể override bằng ENV
     poppler_path: str = r"C:\Program Files\Release-25.12.0-0\poppler-25.12.0\Library\bin"
     tesseract_cmd: str = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     lang: str = "vie"
@@ -23,10 +21,7 @@ class OcrConfig:
     raw_dir: Path = Path("data/raw")
     normalized_dir: Path = Path("data/normalized")
 
-    # số ký tự tối thiểu để coi PDF là có text extractable
     min_text_len: int = 50
-
-    # nếu output txt đã tồn tại và đủ lớn thì bỏ qua
     skip_if_exists_min_bytes: int = 100
 
 
@@ -57,6 +52,8 @@ def _should_skip_existing(out_txt: Path, min_bytes: int) -> bool:
 
 def _ocr_pdf_to_txt(pdf_path: Path, out_txt: Path, cfg: OcrConfig) -> None:
     pytesseract.pytesseract.tesseract_cmd = cfg.tesseract_cmd
+    tessdata_dir = Path(cfg.tesseract_cmd).parent / "tessdata"
+    os.environ["TESSDATA_PREFIX"] = str(tessdata_dir)
 
     images = convert_from_path(
         str(pdf_path),
@@ -80,31 +77,38 @@ def _ocr_pdf_to_txt(pdf_path: Path, out_txt: Path, cfg: OcrConfig) -> None:
 
 def _handle_txt_file(fp: Path, out_txt: Path) -> None:
     out_txt.parent.mkdir(parents=True, exist_ok=True)
-
     raw_text = fp.read_text(encoding="utf-8", errors="ignore")
     cleaned = normalize_text(raw_text)
     out_txt.write_text(cleaned, encoding="utf-8")
-
     print(f"[NORMALIZE] TXT -> {out_txt}")
+
+
+def _handle_word_file(fp: Path, out_txt: Path) -> None:
+    out_txt.parent.mkdir(parents=True, exist_ok=True)
+    extracted = load_document(fp)  # loader.py sẽ tự xử lý .doc/.docx
+    extracted = normalize_text(extracted)
+
+    if not extracted.strip():
+        raise RuntimeError(f"Word file has no extractable text: {fp}")
+
+    out_txt.write_text(extracted, encoding="utf-8")
+    print(f"[NORMALIZE] WORD -> {out_txt}")
 
 
 def _handle_pdf_file(fp: Path, out_txt: Path, cfg: OcrConfig) -> None:
     out_txt.parent.mkdir(parents=True, exist_ok=True)
 
-    # thử extract text trước
     try:
-        extracted = load_document(fp)  # pypdf + normalize_text
+        extracted = load_document(fp)
     except Exception as e:
         print(f"[NORMALIZE][WARN] read PDF failed, OCR fallback: {fp} | err={e}")
         extracted = ""
 
-    # nếu PDF có text thì ghi ra txt luôn
     if len(extracted.strip()) >= cfg.min_text_len:
         out_txt.write_text(extracted, encoding="utf-8")
         print(f"[NORMALIZE] TEXT-PDF -> {out_txt}")
         return
 
-    # nếu không có text thì OCR
     print(f"[NORMALIZE] OCR start -> {fp}")
     _ocr_pdf_to_txt(fp, out_txt, cfg)
     print(f"[NORMALIZE] OCR done -> {out_txt}")
@@ -115,10 +119,10 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
     Chuẩn hóa toàn bộ file trong data/raw sang data/normalized
 
     Quy tắc:
-    - *.txt  -> copy nội dung đã normalize sang normalized/*.txt
-    - *.pdf  -> nếu extract được text thì ghi ra normalized/*.txt
-             -> nếu không extract được thì OCR ra normalized/*.txt
-    - giữ cấu trúc thư mục con nếu có
+    - *.txt   -> normalize -> normalized/*.txt
+    - *.pdf   -> extract text; nếu không được thì OCR -> normalized/*.txt
+    - *.docx  -> extract text -> normalized/*.txt
+    - *.doc   -> convert/read -> normalized/*.txt
     """
     cfg = _build_runtime_cfg(cfg or OcrConfig())
 
@@ -139,7 +143,7 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
     for fp in raw_files:
         suffix = fp.suffix.lower()
 
-        if suffix not in {".pdf", ".txt"}:
+        if suffix not in {".pdf", ".txt", ".doc", ".docx"}:
             print(f"[NORMALIZE] skip unsupported: {fp}")
             continue
 
@@ -154,5 +158,7 @@ def normalize_raw_to_normalized(cfg: Optional[OcrConfig] = None) -> None:
                 _handle_txt_file(fp, out_txt)
             elif suffix == ".pdf":
                 _handle_pdf_file(fp, out_txt, cfg)
+            elif suffix in {".doc", ".docx"}:
+                _handle_word_file(fp, out_txt)
         except Exception as e:
             print(f"[NORMALIZE][ERROR] failed: {fp} | err={e}")
