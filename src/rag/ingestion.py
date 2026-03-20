@@ -254,22 +254,69 @@ def _build_node_context(node: LegalNode) -> str:
         ]
     ).strip()
 
+
+def _sanitize_for_llm(value: Any) -> str:
+    """
+    Sanitize text before sending to ChatCompletions to avoid invalid JSON payloads.
+    Removes null bytes / control chars and drops invalid unicode surrogates.
+    """
+    text = safe_text(value)
+    text = "".join(ch if (ch == "\n" or ch == "\t" or ord(ch) >= 32) else " " for ch in text)
+    text = text.encode("utf-8", "ignore").decode("utf-8", "ignore")
+    return _norm_space(text)
+
+
+def _invoke_llm_safe(system_prompt: str, prompt: str, *, node_id: str) -> str:
+    """
+    Call LLM in fail-open mode:
+    - sanitize payload
+    - retry with truncated prompt if upstream rejects payload
+    - return empty JSON-ish content on failure so pipeline can continue
+    """
+    llm = get_llm()
+    clean_prompt = _sanitize_for_llm(prompt)
+    candidates: List[str] = [clean_prompt]
+    if clean_prompt:
+        candidates.extend(
+            [
+                clean_prompt[:12000],
+                clean_prompt[:8000],
+                clean_prompt[:4000],
+            ]
+        )
+
+    seen = set()
+    for prompt_candidate in candidates:
+        if not prompt_candidate or prompt_candidate in seen:
+            continue
+        seen.add(prompt_candidate)
+        try:
+            response = llm.invoke(
+                [
+                    SystemMessage(content=_sanitize_for_llm(system_prompt)),
+                    HumanMessage(content=prompt_candidate),
+                ]
+            )
+            return safe_text(getattr(response, "content", ""))
+        except Exception as exc:
+            logger.warning(
+                "LLM extraction failed for node_id=%s (prompt_len=%s): %s",
+                node_id,
+                len(prompt_candidate),
+                exc,
+            )
+
+    logger.error("Skipping LLM extraction for node_id=%s after retries.", node_id)
+    return ""
+
 # ============================================================
 # LLM EXTRACTION
 # ============================================================
 
 def extract_entities_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
-    llm = get_llm()
     prompt = _build_node_context(node)
-
-    response = llm.invoke(
-        [
-            SystemMessage(content=ENTITY_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
-        ]
-    )
-
-    parsed = _safe_json_loads(response.content, _empty_entity_payload())
+    raw_content = _invoke_llm_safe(ENTITY_SYSTEM_PROMPT, prompt, node_id=node.node_id)
+    parsed = _safe_json_loads(raw_content, _empty_entity_payload())
 
     entities: List[Dict[str, Any]] = []
     for item in parsed.get("entities", []):
@@ -339,17 +386,9 @@ def extract_entities_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
     return _unique_dicts(entities, ["entity_type", "entity_value", "node_id"])
 
 def extract_relations_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
-    llm = get_llm()
     prompt = _build_node_context(node)
-
-    response = llm.invoke(
-        [
-            SystemMessage(content=RELATION_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
-        ]
-    )
-
-    parsed = _safe_json_loads(response.content, _empty_relation_payload())
+    raw_content = _invoke_llm_safe(RELATION_SYSTEM_PROMPT, prompt, node_id=node.node_id)
+    parsed = _safe_json_loads(raw_content, _empty_relation_payload())
 
     relations: List[Dict[str, Any]] = []
     for item in parsed.get("relations", []):
@@ -637,8 +676,17 @@ def ingest_document(text: str) -> Dict[str, Any]:
             relations_by_node[node.node_id] = []
             continue
 
-        node_entities = extract_entities_with_llm(node)
-        node_relations = extract_relations_with_llm(node)
+        try:
+            node_entities = extract_entities_with_llm(node)
+            node_relations = extract_relations_with_llm(node)
+        except Exception as exc:
+            logger.exception(
+                "Unhandled ingestion error for node_id=%s. Skip node and continue. Error: %s",
+                node.node_id,
+                exc,
+            )
+            node_entities = []
+            node_relations = []
 
         entities_by_node[node.node_id] = node_entities
         relations_by_node[node.node_id] = node_relations
