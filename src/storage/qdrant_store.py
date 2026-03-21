@@ -16,6 +16,7 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key or None,
+        check_compatibility=False,
     )
 
 
@@ -114,11 +115,28 @@ def search_qdrant(
     filters: Optional[Dict[str, Any]] = None,
 ) -> List[qm.ScoredPoint]:
     qfilter = build_filter(filters or {})
-    return client.search(
+    if hasattr(client, "search"):
+        return client.search(
+            collection_name=settings.qdrant_collection,
+            query_vector=query_vector,
+            limit=top_k,
+            query_filter=qfilter,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+    # qdrant-client mới dùng query_points thay cho search
+    response = client.query_points(
         collection_name=settings.qdrant_collection,
-        query_vector=query_vector,
+        query=query_vector,
         limit=top_k,
         query_filter=qfilter,
         with_payload=True,
         with_vectors=False,
     )
+    points = getattr(response, "points", None)
+    if points is not None:
+        return list(points)
+    if isinstance(response, dict):
+        return list(response.get("points", []) or [])
+    return []
