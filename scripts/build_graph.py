@@ -25,9 +25,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build runtime graph before starting server.")
     parser.add_argument("--input_dir", type=str, default=None)
     parser.add_argument("--glob", type=str, default=None)
+    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
 
-    graph = build_runtime_graph(input_dir=args.input_dir, glob_pattern=args.glob)
+    graph = build_runtime_graph(
+        input_dir=args.input_dir,
+        glob_pattern=args.glob,
+        max_workers=args.workers,
+    )
     status = get_runtime_status()
 
     print(
