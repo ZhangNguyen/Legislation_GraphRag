@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -89,6 +90,45 @@ Yêu cầu:
 - Nếu không có thì trả {"relations": []}.
 """.strip()
 
+JOINT_EXTRACTION_SYSTEM_PROMPT = """
+Bạn là bộ trích xuất pháp lý cho GraphRAG từ văn bản pháp luật Việt Nam.
+
+Nhiệm vụ:
+- Với mỗi node đầu vào, trích xuất đồng thời entities và relations.
+- Không suy diễn vượt ra ngoài văn bản đầu vào.
+- Trả về JSON hợp lệ, KHÔNG markdown.
+
+Schema bắt buộc:
+{
+  "results": [
+    {
+      "node_id": "...",
+      "entities": [
+        {
+          "entity_type": "actor | behavior | legal_term | penalty | remedy | document_ref | article_ref | clause_ref | point_ref | date_ref | legal_effect",
+          "entity_value": "..."
+        }
+      ],
+      "relations": [
+        {
+          "relation_type": "MENTIONS | REGULATES | PENALIZED_BY | MAY_LEAD_TO | REQUIRES | GRANTS_RIGHT | PROHIBITS | REFERS_TO | AMENDS | REPEALS | EFFECTIVE_FROM | RESPONSIBLE_FOR | APPLIES_TO",
+          "source_text": "cụm nguồn ngắn",
+          "target_text": "cụm đích ngắn"
+        }
+      ]
+    }
+  ]
+}
+
+Yêu cầu:
+- Luôn giữ đúng node_id theo input.
+- Nếu node không có kết quả, trả entities/relations rỗng cho node đó.
+- source_text và target_text phải ngắn, lấy từ input.
+""".strip()
+
+LLM_BATCH_SIZE = 8
+LLM_API_WORKERS = 4
+
 
 # ============================================================
 # JSON HELPERS
@@ -99,6 +139,10 @@ def _empty_entity_payload() -> Dict[str, Any]:
 
 def _empty_relation_payload() -> Dict[str, Any]:
     return {"relations": []}
+
+
+def _empty_joint_payload() -> Dict[str, Any]:
+    return {"results": []}
 
 
 def _safe_json_loads(text: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
@@ -254,25 +298,123 @@ def _build_node_context(node: LegalNode) -> str:
         ]
     ).strip()
 
-# ============================================================
-# LLM EXTRACTION
-# ============================================================
 
-def extract_entities_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
+def _sanitize_for_llm(value: Any) -> str:
+    """
+    Sanitize text before sending to ChatCompletions to avoid invalid JSON payloads.
+    Removes null bytes / control chars and drops invalid unicode surrogates.
+    """
+    text = safe_text(value)
+    text = "".join(ch if (ch == "\n" or ch == "\t" or ord(ch) >= 32) else " " for ch in text)
+    text = text.encode("utf-8", "ignore").decode("utf-8", "ignore")
+    return _norm_space(text)
+
+
+def _invoke_llm_safe(system_prompt: str, prompt: str, *, node_id: str) -> str:
+    """
+    Call LLM in fail-open mode:
+    - sanitize payload
+    - retry with truncated prompt if upstream rejects payload
+    - return empty JSON-ish content on failure so pipeline can continue
+    """
     llm = get_llm()
-    prompt = _build_node_context(node)
+    clean_prompt = _sanitize_for_llm(prompt)
+    candidates: List[str] = [clean_prompt]
+    if clean_prompt:
+        candidates.extend(
+            [
+                clean_prompt[:12000],
+                clean_prompt[:8000],
+                clean_prompt[:4000],
+            ]
+        )
 
-    response = llm.invoke(
-        [
-            SystemMessage(content=ENTITY_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
+    seen = set()
+    for prompt_candidate in candidates:
+        if not prompt_candidate or prompt_candidate in seen:
+            continue
+        seen.add(prompt_candidate)
+        try:
+            response = llm.invoke(
+                [
+                    SystemMessage(content=_sanitize_for_llm(system_prompt)),
+                    HumanMessage(content=prompt_candidate),
+                ]
+            )
+            return safe_text(getattr(response, "content", ""))
+        except Exception as exc:
+            logger.warning(
+                "LLM extraction failed for node_id=%s (prompt_len=%s): %s",
+                node_id,
+                len(prompt_candidate),
+                exc,
+            )
+
+    logger.error("Skipping LLM extraction for node_id=%s after retries.", node_id)
+    return ""
+
+
+def _batched(nodes: List[LegalNode], size: int) -> List[List[LegalNode]]:
+    if size <= 0:
+        size = 1
+    return [nodes[i:i + size] for i in range(0, len(nodes), size)]
+
+
+def _build_batch_prompt(nodes: List[LegalNode]) -> str:
+    payload = {
+        "nodes": [
+            {
+                "node_id": _sanitize_for_llm(node.node_id),
+                "node_type": _sanitize_for_llm(node.node_type),
+                "article": _sanitize_for_llm(node.article or ""),
+                "clause": _sanitize_for_llm(node.clause or ""),
+                "point": _sanitize_for_llm(node.point or ""),
+                "action": _sanitize_for_llm(node.action or ""),
+                "target_article": _sanitize_for_llm(node.target_article or ""),
+                "target_clause": _sanitize_for_llm(node.target_clause or ""),
+                "target_point": _sanitize_for_llm(node.target_point or ""),
+                "text": _sanitize_for_llm(node.text or ""),
+            }
+            for node in nodes
         ]
+    }
+    # ensure_ascii=True giúp payload chỉ còn ASCII escaped, giảm rủi ro lỗi encode JSON ở HTTP layer.
+    return json.dumps(payload, ensure_ascii=True)
+
+
+def _extract_entities_relations_batch(
+    nodes: List[LegalNode],
+) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    if not nodes:
+        return {}
+
+    prompt = _build_batch_prompt(nodes)
+    raw_content = _invoke_llm_safe(
+        JOINT_EXTRACTION_SYSTEM_PROMPT,
+        prompt,
+        node_id=f"batch[{len(nodes)}]",
     )
+    parsed = _safe_json_loads(raw_content, _empty_joint_payload())
+    by_node: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
 
-    parsed = _safe_json_loads(response.content, _empty_entity_payload())
+    for item in parsed.get("results", []):
+        node_id = str(item.get("node_id", "")).strip()
+        if not node_id:
+            continue
+        by_node[node_id] = {
+            "entities": list(item.get("entities", []) or []),
+            "relations": list(item.get("relations", []) or []),
+        }
 
+    return by_node
+
+
+def _normalize_entities_for_node(
+    node: LegalNode,
+    raw_entities: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     entities: List[Dict[str, Any]] = []
-    for item in parsed.get("entities", []):
+    for item in raw_entities:
         entity_type = _canonicalize_entity_type(str(item.get("entity_type", "")))
         entity_value = _norm_space(str(item.get("entity_value", "")))
 
@@ -338,21 +480,13 @@ def extract_entities_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
 
     return _unique_dicts(entities, ["entity_type", "entity_value", "node_id"])
 
-def extract_relations_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
-    llm = get_llm()
-    prompt = _build_node_context(node)
 
-    response = llm.invoke(
-        [
-            SystemMessage(content=RELATION_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
-        ]
-    )
-
-    parsed = _safe_json_loads(response.content, _empty_relation_payload())
-
+def _normalize_relations_for_node(
+    node: LegalNode,
+    raw_relations: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     relations: List[Dict[str, Any]] = []
-    for item in parsed.get("relations", []):
+    for item in raw_relations:
         relation_type = _canonicalize_relation_type(str(item.get("relation_type", "")))
         source_text = _norm_space(str(item.get("source_text", "")))
         target_text = _norm_space(str(item.get("target_text", "")))
@@ -412,6 +546,22 @@ def extract_relations_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
             "target_point",
         ],
     )
+
+# ============================================================
+# LLM EXTRACTION
+# ============================================================
+
+def extract_entities_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
+    prompt = _build_node_context(node)
+    raw_content = _invoke_llm_safe(ENTITY_SYSTEM_PROMPT, prompt, node_id=node.node_id)
+    parsed = _safe_json_loads(raw_content, _empty_entity_payload())
+    return _normalize_entities_for_node(node, list(parsed.get("entities", []) or []))
+
+def extract_relations_with_llm(node: LegalNode) -> List[Dict[str, Any]]:
+    prompt = _build_node_context(node)
+    raw_content = _invoke_llm_safe(RELATION_SYSTEM_PROMPT, prompt, node_id=node.node_id)
+    parsed = _safe_json_loads(raw_content, _empty_relation_payload())
+    return _normalize_relations_for_node(node, list(parsed.get("relations", []) or []))
 
 
 # ============================================================
@@ -631,18 +781,57 @@ def ingest_document(text: str) -> Dict[str, Any]:
     entities_by_node: Dict[str, List[Dict[str, Any]]] = {}
     relations_by_node: Dict[str, List[Dict[str, Any]]] = {}
 
+    llm_nodes: List[LegalNode] = []
     for node in parsed_nodes:
-        if not should_extract_with_llm(node):
-            entities_by_node[node.node_id] = []
-            relations_by_node[node.node_id] = []
+        if should_extract_with_llm(node):
+            llm_nodes.append(node)
+            continue
+        entities_by_node[node.node_id] = []
+        relations_by_node[node.node_id] = []
+
+    extraction_by_node: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+    batches = _batched(llm_nodes, LLM_BATCH_SIZE)
+
+    with ThreadPoolExecutor(max_workers=LLM_API_WORKERS) as executor:
+        futures = [executor.submit(_extract_entities_relations_batch, batch) for batch in batches]
+        for future in as_completed(futures):
+            try:
+                extraction_by_node.update(future.result())
+            except Exception as exc:
+                logger.exception("Unhandled ingestion batch error. Skip batch and continue. Error: %s", exc)
+
+    for node in llm_nodes:
+        payload = extraction_by_node.get(node.node_id, {})
+        raw_entities = list(payload.get("entities", []) or [])
+        raw_relations = list(payload.get("relations", []) or [])
+
+        if not payload:
+            logger.warning(
+                "Missing batch extraction payload for node_id=%s. Fallback to single-node calls.",
+                node.node_id,
+            )
+            try:
+                node_entities = extract_entities_with_llm(node)
+                node_relations = extract_relations_with_llm(node)
+            except Exception as exc:
+                logger.exception(
+                    "Fallback single-node extraction failed for node_id=%s. Skip node. Error: %s",
+                    node.node_id,
+                    exc,
+                )
+                node_entities = []
+                node_relations = []
+            entities_by_node[node.node_id] = node_entities
+            relations_by_node[node.node_id] = node_relations
+            all_entities.extend(node_entities)
+            all_relations.extend(node_relations)
             continue
 
-        node_entities = extract_entities_with_llm(node)
-        node_relations = extract_relations_with_llm(node)
+        node_entities = _normalize_entities_for_node(node, raw_entities)
+        node_relations = _normalize_relations_for_node(node, raw_relations)
 
         entities_by_node[node.node_id] = node_entities
         relations_by_node[node.node_id] = node_relations
-
         all_entities.extend(node_entities)
         all_relations.extend(node_relations)
 

@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -260,6 +261,8 @@ def save_current_runtime_graph_snapshot(force_build: bool = False) -> Dict[str, 
 def build_runtime_graph(
     input_dir: Optional[str] = None,
     glob_pattern: Optional[str] = None,
+    *,
+    max_workers: int = 4,
 ) -> Dict[str, Any]:
     start = time.perf_counter()
     _RUNTIME["graph_build_in_progress"] = True
@@ -274,49 +277,59 @@ def build_runtime_graph(
 
     per_doc_graphs: List[Dict[str, Any]] = []
     doc_count = 0
+    max_workers = max(1, int(max_workers))
+    files = [fp for fp in sorted(base.glob(glob_pattern)) if fp.suffix.lower() in {".pdf", ".txt"}]
+
+    def _build_doc_graph(fp: Path) -> Dict[str, Any]:
+        doc_started = time.perf_counter()
+        text = load_document(fp)
+        doc_title = fp.stem
+        doc_prefix = _slugify(doc_title)
+        logger.info("Graph build doc start: %s (chars=%s)", fp.name, len(text))
+
+        ingestion_output = ingest_document(text=text)
+        logger.info(
+            "Graph build ingestion done: %s nodes=%s edges=%s chunks=%s",
+            fp.name,
+            len(ingestion_output.get("graph_nodes", [])),
+            len(ingestion_output.get("graph_edges", [])),
+            len(ingestion_output.get("chunks", [])),
+        )
+
+        graph = materialize_graph_from_ingestion(ingestion_output)
+        graph = build_hierarchical_summaries(
+            graph=graph,
+            document_title=doc_title,
+            include_clause=False,
+            include_article=True,
+            include_change=True,
+            include_community=False,
+        )["graph"]
+
+        graph = annotate_graph_with_versioning(graph)
+        graph = _prefix_graph_ids(graph, doc_prefix)
+        return {
+            "file_name": fp.name,
+            "graph": graph,
+            "doc_seconds": time.perf_counter() - doc_started,
+        }
 
     try:
-        for fp in sorted(base.glob(glob_pattern)):
-            if fp.suffix.lower() not in {".pdf", ".txt"}:
-                continue
-
-            doc_started = time.perf_counter()
-            text = load_document(fp)
-            doc_title = fp.stem
-            doc_prefix = _slugify(doc_title)
-            logger.info("Graph build doc start: %s (chars=%s)", fp.name, len(text))
-
-            ingestion_output = ingest_document(text=text)
-            logger.info(
-                "Graph build ingestion done: %s nodes=%s edges=%s chunks=%s",
-                fp.name,
-                len(ingestion_output.get("graph_nodes", [])),
-                len(ingestion_output.get("graph_edges", [])),
-                len(ingestion_output.get("chunks", [])),
-            )
-
-            graph = materialize_graph_from_ingestion(ingestion_output)
-            graph = build_hierarchical_summaries(
-                graph=graph,
-                document_title=doc_title,
-                include_clause=False,
-                include_article=True,
-                include_change=True,
-                include_community=False,
-            )["graph"]
-
-            graph = annotate_graph_with_versioning(graph)
-            graph = _prefix_graph_ids(graph, doc_prefix)
-
-            per_doc_graphs.append(graph)
-            doc_count += 1
-            logger.info(
-                "Graph build doc done: %s graph_nodes=%s graph_edges=%s took=%.2fs",
-                fp.name,
-                len(graph.get("nodes", [])),
-                len(graph.get("edges", [])),
-                time.perf_counter() - doc_started,
-            )
+        logger.info("Graph build using max_workers=%s over docs=%s", max_workers, len(files))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(_build_doc_graph, fp) for fp in files]
+            for future in as_completed(futures):
+                result = future.result()
+                graph = result["graph"]
+                per_doc_graphs.append(graph)
+                doc_count += 1
+                logger.info(
+                    "Graph build doc done: %s graph_nodes=%s graph_edges=%s took=%.2fs",
+                    result["file_name"],
+                    len(graph.get("nodes", [])),
+                    len(graph.get("edges", [])),
+                    result["doc_seconds"],
+                )
 
         merged = _merge_graphs(per_doc_graphs)
 

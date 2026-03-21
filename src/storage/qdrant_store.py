@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http import models as qm
 from qdrant_client.http.models import Distance, VectorParams
 
@@ -16,6 +17,7 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key or None,
+        check_compatibility=False,
     )
 
 
@@ -114,11 +116,50 @@ def search_qdrant(
     filters: Optional[Dict[str, Any]] = None,
 ) -> List[qm.ScoredPoint]:
     qfilter = build_filter(filters or {})
-    return client.search(
+    if hasattr(client, "search"):
+        return client.search(
+            collection_name=settings.qdrant_collection,
+            query_vector=query_vector,
+            limit=top_k,
+            query_filter=qfilter,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+    # qdrant-client mới dùng query_points thay cho search.
+    # Nhưng server cũ (vd 1.9.x) có thể trả 404 cho endpoint query_points.
+    try:
+        response = client.query_points(
+            collection_name=settings.qdrant_collection,
+            query=query_vector,
+            limit=top_k,
+            query_filter=qfilter,
+            with_payload=True,
+            with_vectors=False,
+        )
+        points = getattr(response, "points", None)
+        if points is not None:
+            return list(points)
+        if isinstance(response, dict):
+            return list(response.get("points", []) or [])
+    except UnexpectedResponse as exc:
+        if getattr(exc, "status_code", None) != 404:
+            raise
+
+    # Fallback gọi REST search_points (tương thích server cũ)
+    legacy_response = client.http.search_api.search_points(
         collection_name=settings.qdrant_collection,
-        query_vector=query_vector,
-        limit=top_k,
-        query_filter=qfilter,
-        with_payload=True,
-        with_vectors=False,
+        search_request=qm.SearchRequest(
+            vector=query_vector,
+            limit=top_k,
+            filter=qfilter,
+            with_payload=True,
+            with_vector=False,
+        ),
     )
+    result = getattr(legacy_response, "result", None)
+    if result is not None:
+        return list(result)
+    if isinstance(legacy_response, dict):
+        return list(legacy_response.get("result", []) or [])
+    return []
