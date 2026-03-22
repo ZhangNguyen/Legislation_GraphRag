@@ -31,13 +31,7 @@ def _norm_space(text: str) -> str:
     return " ".join((text or "").split()).strip()
 
 
-def _wants_detailed_answer(question: str, response_mode: str | None = None) -> bool:
-    mode = (response_mode or "").strip().lower()
-    if mode in {"same_level", "upper_level"}:
-        return False
-    if mode == "lower_level":
-        return True
-
+def _wants_detailed_answer(question: str) -> bool:
     q = (question or "").lower()
     detail_keywords = [
         "chi tiết",
@@ -51,22 +45,8 @@ def _wants_detailed_answer(question: str, response_mode: str | None = None) -> b
     return any(k in q for k in detail_keywords)
 
 
-def _answer_style_instructions(question: str, response_mode: str | None = None) -> str:
-    wants_detail = _wants_detailed_answer(question, response_mode=response_mode)
-    mode = (response_mode or "").strip().lower()
-
-    if mode in {"same_level", "upper_level"}:
-        return (
-            "- Câu hỏi đang ở mức cùng cấp hoặc trên cấp: trả lời ngắn gọn theo các node chính liên quan, sau đó nêu tóm tắt ngắn.\n"
-            "- Không đi sâu chi tiết các cấp con nếu người dùng chưa yêu cầu."
-        )
-
-    if mode == "lower_level":
-        return (
-            "- Câu hỏi đang ở mức dưới cấp: trả lời đầy đủ các cấp con liên quan theo đúng thứ tự cha -> con.\n"
-            "- Sau phần chi tiết, thêm một đoạn tóm tắt ngắn để người dùng nắm ý chính."
-        )
-
+def _answer_style_instructions(question: str) -> str:
+    wants_detail = _wants_detailed_answer(question)
     if wants_detail:
         return (
             "- Ưu tiên trả lời đầy đủ theo cấu trúc pháp lý (Điều -> Khoản -> Điểm nếu có).\n"
@@ -132,11 +112,9 @@ def _build_context(passages: List[Dict[str, Any]], max_passages: int) -> str:
 def _build_user_prompt(
     question: str,
     passages: List[Dict[str, Any]],
-    *,
-    response_mode: str | None = None,
 ) -> str:
     context = _build_context(passages, settings.answer_max_context_passages)
-    answer_style = _answer_style_instructions(question, response_mode=response_mode)
+    answer_style = _answer_style_instructions(question)
 
     return f"""
 Câu hỏi người dùng:
@@ -181,7 +159,6 @@ def build_chat_response(
     *,
     max_context_passages: int | None = None,
     max_source_items: int | None = None,
-    response_mode: str | None = None,
 ) -> ChatResponse:
     if not passages:
         return ChatResponse(
@@ -193,10 +170,9 @@ def build_chat_response(
     max_source_items = max_source_items or settings.answer_max_source_items
 
     llm = get_llm()
-    wants_detail = _wants_detailed_answer(question, response_mode=response_mode)
+    wants_detail = _wants_detailed_answer(question)
     logger.info(
-        "QA decision: response_mode=%s wants_detail=%s passages_in=%s context_limit=%s source_limit=%s",
-        response_mode,
+        "QA decision: wants_detail=%s passages_in=%s context_limit=%s source_limit=%s",
         wants_detail,
         len(passages),
         max_context_passages,
@@ -222,7 +198,6 @@ def build_chat_response(
     prompt = _build_user_prompt(
         question,
         passages[:max_context_passages],
-        response_mode=response_mode,
     )
     logger.debug("QA prompt preview (first 1200 chars): %s", prompt[:1200])
 
@@ -263,12 +238,9 @@ def answer_with_rag(
     max_source_items: int | None = None,
 ) -> ChatResponse:
     passages = retrieval_result.get("passages", []) or []
-    hierarchy_scope = retrieval_result.get("hierarchy_scope", {}) or {}
-    response_mode = hierarchy_scope.get("relative_level")
     return build_chat_response(
         question=question,
         passages=passages,
         max_context_passages=max_context_passages,
         max_source_items=max_source_items,
-        response_mode=response_mode,
     )
