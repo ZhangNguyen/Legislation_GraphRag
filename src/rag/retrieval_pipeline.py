@@ -408,6 +408,24 @@ def _node_sort_key(node: Dict[str, Any]) -> Tuple[int, int, int, str]:
     return (type_rank, clause_rank, point_rank, node_id)
 
 
+def analyze_hierarchy_scope(
+    question: str,
+    graph: Dict[str, Any],
+    seed_items: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Backward-compatible no-op.
+    Một số nhánh cũ có thể vẫn gọi hàm này; giữ stub để tránh NameError.
+    """
+    _ = (question, graph, seed_items)
+    return {
+        "is_hierarchy_query": False,
+        "asked_level": None,
+        "hit_level": None,
+        "relative_level": None,
+    }
+
+
 def _find_parent_article_node_id(graph: Dict[str, Any], start_node_id: str) -> str:
     node_idx = _node_index(graph)
     reverse = _reverse_adjacency(graph)
