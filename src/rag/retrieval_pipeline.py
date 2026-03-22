@@ -676,6 +676,7 @@ def collect_final_passages(
     question: str,
     final_top_k: Optional[int] = None,
     cross_top_k: Optional[int] = None,
+    hierarchy_scope: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     node_idx = _node_index(graph)
 
@@ -810,6 +811,8 @@ def retrieve_with_graph(
         filters=merged_filters,
         top_k=qdrant_top_k or settings.qdrant_top_k,
     )
+    hierarchy_scope = analyze_hierarchy_scope(question, graph, seeds)
+    logger.info("Hierarchy scope: %s", hierarchy_scope)
 
     graph_scores = expand_graph_from_seeds(
         graph=graph,
@@ -826,6 +829,7 @@ def retrieve_with_graph(
         question=question,
         final_top_k=final_top_k or settings.final_top_k,
         cross_top_k=cross_top_k or settings.cross_top_k,
+        hierarchy_scope=hierarchy_scope,
     )
 
     return {
@@ -838,4 +842,5 @@ def retrieve_with_graph(
         "seed_candidates": seeds,
         "graph_scores": graph_scores,
         "passages": passages,
+        "hierarchy_scope": hierarchy_scope,
     }

@@ -159,6 +159,7 @@ def build_chat_response(
     *,
     max_context_passages: int | None = None,
     max_source_items: int | None = None,
+    response_mode: str | None = None,
 ) -> ChatResponse:
     if not passages:
         return ChatResponse(
@@ -238,6 +239,8 @@ def answer_with_rag(
     max_source_items: int | None = None,
 ) -> ChatResponse:
     passages = retrieval_result.get("passages", []) or []
+    hierarchy_scope = retrieval_result.get("hierarchy_scope", {}) or {}
+    response_mode = hierarchy_scope.get("relative_level")
     return build_chat_response(
         question=question,
         passages=passages,
