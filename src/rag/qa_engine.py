@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -7,6 +8,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from src.app.settings import settings
 from src.rag.openai_clients import get_llm
 from src.rag.schemas import ChatResponse, SourceItem
+
+logger = logging.getLogger(__name__)
 
 
 ANSWER_SYSTEM_PROMPT = """
@@ -26,6 +29,35 @@ Nguyên tắc:
 
 def _norm_space(text: str) -> str:
     return " ".join((text or "").split()).strip()
+
+
+def _wants_detailed_answer(question: str) -> bool:
+    q = (question or "").lower()
+    detail_keywords = [
+        "chi tiết",
+        "cụ thể",
+        "phân tích",
+        "giải thích",
+        "ví dụ",
+        "đầy đủ",
+        "toàn văn",
+    ]
+    return any(k in q for k in detail_keywords)
+
+
+def _answer_style_instructions(question: str) -> str:
+    wants_detail = _wants_detailed_answer(question)
+    if wants_detail:
+        return (
+            "- Ưu tiên trả lời đầy đủ theo cấu trúc pháp lý (Điều -> Khoản -> Điểm nếu có).\n"
+            "- Có thể nêu thêm chi tiết quan trọng của từng mục, nhưng vẫn bám sát ngữ cảnh đã truy xuất."
+        )
+
+    return (
+        "- Trả lời ngắn gọn, bám sát trọng tâm câu hỏi; không lan man.\n"
+        "- Nếu câu hỏi yêu cầu 'quy định như thế nào' cho một Điều, hãy gom theo từng mục con (Khoản/Điểm) và tóm tắt 1 ý chính cho mỗi mục.\n"
+        "- Chỉ mở rộng giải thích chi tiết khi người dùng yêu cầu rõ."
+    )
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -50,34 +82,39 @@ def _build_context(passages: List[Dict[str, Any]], max_passages: int) -> str:
         article = md.get("article", "")
         clause = md.get("clause", "")
         point = md.get("point", "")
+        node_type = md.get("node_type") or p.get("node_type") or p.get("metadata", {}).get("legal_role", "")
+        legal_role = md.get("legal_role", "")
+        parent_id = md.get("parent_id", "")
         version_status = md.get("version_status", "")
-
-        header_parts = [
-            str(x) for x in [
-                law_name,
-                law_type,
-                year,
-                source,
-                article,
-                clause,
-                point,
-                version_status,
-            ]
-            if x not in (None, "")
-        ]
-        header = " | ".join(header_parts) if header_parts else f"Passage {i}"
 
         text = _norm_space(str(p.get("text") or p.get("snippet") or ""))
 
-        lines.append(f"[Nguồn {i}] {header}")
+        lines.append(
+            f"[Nguồn {i}] "
+            f"node_type={node_type or 'unknown'} | "
+            f"legal_role={legal_role or 'unknown'} | "
+            f"law_name={law_name or 'unknown'} | "
+            f"law_type={law_type or 'unknown'} | "
+            f"year={year or 'unknown'} | "
+            f"source={source or 'unknown'} | "
+            f"article={article or '-'} | "
+            f"clause={clause or '-'} | "
+            f"point={point or '-'} | "
+            f"parent_id={parent_id or '-'} | "
+            f"version_status={version_status or '-'}"
+        )
         lines.append(text)
         lines.append("")
 
     return "\n".join(lines).strip()
 
 
-def _build_user_prompt(question: str, passages: List[Dict[str, Any]]) -> str:
+def _build_user_prompt(
+    question: str,
+    passages: List[Dict[str, Any]],
+) -> str:
     context = _build_context(passages, settings.answer_max_context_passages)
+    answer_style = _answer_style_instructions(question)
 
     return f"""
 Câu hỏi người dùng:
@@ -91,6 +128,7 @@ Yêu cầu trả lời:
 - Nếu có thể, nêu rõ theo từng trường hợp.
 - Nếu ngữ cảnh không đủ, nói rõ giới hạn.
 - Không cần liệt kê nguồn ở cuối vì nguồn sẽ được hệ thống trả riêng.
+{answer_style}
 """.strip()
 
 
@@ -132,7 +170,36 @@ def build_chat_response(
     max_source_items = max_source_items or settings.answer_max_source_items
 
     llm = get_llm()
-    prompt = _build_user_prompt(question, passages[:max_context_passages])
+    wants_detail = _wants_detailed_answer(question)
+    logger.info(
+        "QA decision: wants_detail=%s passages_in=%s context_limit=%s source_limit=%s",
+        wants_detail,
+        len(passages),
+        max_context_passages,
+        max_source_items,
+    )
+    preview_nodes: List[str] = []
+    for p in passages[:max_context_passages]:
+        md = p.get("metadata", {}) or {}
+        preview_nodes.append(
+            "|".join(
+                [
+                    str(p.get("node_id") or ""),
+                    str(md.get("node_type") or ""),
+                    str(md.get("article") or ""),
+                    str(md.get("clause") or ""),
+                    str(md.get("point") or ""),
+                ]
+            )
+        )
+    if preview_nodes:
+        logger.info("QA context nodes selected: %s", preview_nodes)
+
+    prompt = _build_user_prompt(
+        question,
+        passages[:max_context_passages],
+    )
+    logger.debug("QA prompt preview (first 1200 chars): %s", prompt[:1200])
 
     response = llm.invoke(
         [
