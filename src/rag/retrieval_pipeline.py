@@ -435,159 +435,6 @@ def _find_parent_article_node_id(graph: Dict[str, Any], start_node_id: str) -> s
     return str(start_node_id)
 
 
-def _node_level(node: Dict[str, Any]) -> Optional[str]:
-    md = node.get("metadata", {}) or {}
-    node_type = str(node.get("node_type") or md.get("node_type") or "").strip().lower()
-    if node_type in {"article", "clause", "point"}:
-        return node_type
-    return None
-
-
-def _parse_asked_level(question: str) -> Optional[str]:
-    q = (question or "").lower()
-    if "điểm" in q:
-        return "point"
-    if "khoản" in q:
-        return "clause"
-    if "điều" in q:
-        return "article"
-    return None
-
-
-def _classify_relative_level(asked_level: Optional[str], hit_level: Optional[str]) -> Optional[str]:
-    if not asked_level or not hit_level:
-        return None
-    rank = {"article": 1, "clause": 2, "point": 3}
-    a = rank.get(asked_level)
-    h = rank.get(hit_level)
-    if a is None or h is None:
-        return None
-    if a == h:
-        return "same_level"
-    if a < h:
-        return "upper_level"
-    return "lower_level"
-
-
-def analyze_hierarchy_scope(
-    question: str,
-    graph: Dict[str, Any],
-    seed_items: List[Dict[str, Any]],
-) -> Dict[str, Any]:
-    asked_level = _parse_asked_level(question)
-    if not asked_level:
-        return {
-            "is_hierarchy_query": False,
-            "asked_level": None,
-            "hit_level": None,
-            "relative_level": None,
-        }
-
-    node_idx = _node_index(graph)
-    hit_node: Optional[Dict[str, Any]] = None
-    for s in seed_items:
-        node_id = str(s.get("node_id") or "").strip()
-        if node_id and node_id in node_idx:
-            hit_node = node_idx[node_id]
-            break
-
-    hit_level = _node_level(hit_node or {})
-    relative_level = _classify_relative_level(asked_level, hit_level)
-    return {
-        "is_hierarchy_query": True,
-        "asked_level": asked_level,
-        "hit_level": hit_level,
-        "relative_level": relative_level,
-    }
-
-
-def _build_passage_from_node(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    node_id = str(node.get("node_id") or "").strip()
-    text = str(node.get("text") or "").strip()
-    if not node_id or not text:
-        return None
-    md = node.get("metadata", {}) or {}
-    return {
-        "node_id": node_id,
-        "text": text,
-        "snippet": text[:700],
-        "metadata": md,
-        "dense_score": 0.0,
-        "hybrid_score": 0.0,
-        "graph_score": 0.0,
-        "version_bonus": 0.0,
-        "version_status": md.get("version_status"),
-        "version_event_count": int(md.get("version_event_count") or 0),
-        "final_score": 0.0,
-    }
-
-
-def _inject_summary_passages(graph: Dict[str, Any], passages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    if not passages:
-        return passages
-
-    node_idx = _node_index(graph)
-    reverse = _reverse_adjacency(graph)
-    out: List[Dict[str, Any]] = []
-    seen: Set[str] = set()
-
-    for p in passages:
-        node_id = str(p.get("node_id") or "")
-        if node_id and node_id not in seen:
-            out.append(p)
-            seen.add(node_id)
-
-        for e in reverse.get(node_id, []):
-            rel = str(e.get("relation_type") or "").strip().upper()
-            if rel != "SUMMARIZES":
-                continue
-            src = str(e.get("source_id") or "").strip()
-            s_node = node_idx.get(src)
-            if not s_node:
-                continue
-            md = s_node.get("metadata", {}) or {}
-            if str(md.get("artifact_type") or "").strip().lower() != "summary":
-                continue
-            sp = _build_passage_from_node(s_node)
-            if not sp:
-                continue
-            sid = str(sp.get("node_id") or "")
-            if sid and sid not in seen:
-                out.append(sp)
-                seen.add(sid)
-    return out
-
-
-def _prune_passages_for_hierarchy_scope(
-    graph: Dict[str, Any],
-    passages: List[Dict[str, Any]],
-    hierarchy_scope: Optional[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    if not passages or not hierarchy_scope or not hierarchy_scope.get("is_hierarchy_query"):
-        return passages
-
-    relative = str(hierarchy_scope.get("relative_level") or "")
-    node_idx = _node_index(graph)
-
-    if relative in {"same_level", "upper_level"}:
-        # Trả lời ngắn: ưu tiên node cùng cây điều + summary của chúng
-        compact: List[Dict[str, Any]] = []
-        for p in passages:
-            node = node_idx.get(str(p.get("node_id") or ""), {})
-            level = _node_level(node)
-            if level in {"article", "clause", "point"}:
-                compact.append(p)
-        compact = _inject_summary_passages(graph, compact)
-        return compact if compact else passages
-
-    if relative == "lower_level":
-        # Trả lời chi tiết: giữ passage hiện có + bổ sung summary hỗ trợ
-        detailed = _inject_summary_passages(graph, passages)
-        return detailed if detailed else passages
-
-    return passages
-
-
 def reorder_passages_by_article_tree(
     graph: Dict[str, Any],
     passages: List[Dict[str, Any]],
@@ -905,23 +752,18 @@ def collect_final_passages(
 
     final_k = final_top_k or settings.final_top_k
     pre_cross_passages = passages[:final_k]
-    use_rerank = not bool((hierarchy_scope or {}).get("is_hierarchy_query"))
+    cross_k = cross_top_k or settings.cross_top_k
+    cross_k = min(cross_k, len(pre_cross_passages))
 
-    if use_rerank:
-        cross_k = cross_top_k or settings.cross_top_k
-        cross_k = min(cross_k, len(pre_cross_passages))
-
-        if cross_k > 0:
-            reranked_top = cross_rerank(question, pre_cross_passages[:cross_k], top_n=cross_k)
-            remaining = pre_cross_passages[cross_k:]
-            final_passages = reranked_top + remaining
-        else:
-            final_passages = pre_cross_passages
+    if cross_k > 0:
+        reranked_top = cross_rerank(question, pre_cross_passages[:cross_k], top_n=cross_k)
+        remaining = pre_cross_passages[cross_k:]
+        final_passages = reranked_top + remaining
     else:
         final_passages = pre_cross_passages
 
     final_passages = reorder_passages_by_article_tree(graph, final_passages)
-    final_passages = _prune_passages_for_hierarchy_scope(graph, final_passages, hierarchy_scope)
+    logger.info("Passage selection final_count=%s", len(final_passages))
 
     for i, p in enumerate(final_passages):
         p["rank"] = i + 1
