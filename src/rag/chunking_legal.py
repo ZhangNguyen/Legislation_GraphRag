@@ -3,41 +3,26 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-
-# ==============================
-# DATA STRUCTURE
-# ==============================
 
 @dataclass
 class LegalNode:
     node_id: str
     node_type: str
-
     section: Optional[str]
     subsection: Optional[str]
-
     article: Optional[str]
     clause: Optional[str]
     point: Optional[str]
-
     text: str
     parent_id: Optional[str]
-
-    # semantic / legal metadata
     legal_role: Optional[str] = None
-
-    # change / amendment metadata
     action: Optional[str] = None
     target_article: Optional[str] = None
     target_clause: Optional[str] = None
     target_point: Optional[str] = None
 
-
-# ==============================
-# REGEX
-# ==============================
 
 ARTICLE_RE = re.compile(r"^Điều\s+(\d+)[\.:]?", re.IGNORECASE)
 SECTION_RE = re.compile(r"^([IVXLCDM]+)\.\s+(.+)$", re.IGNORECASE)
@@ -57,12 +42,21 @@ TARGET_CLAUSE_RE = re.compile(r"khoản\s+(\d+)", re.IGNORECASE)
 TARGET_POINT_RE = re.compile(r"điểm\s+([a-zđ])", re.IGNORECASE)
 
 
-# ==============================
-# UTILS
-# ==============================
+SPECIAL_NODE_TYPES = {
+    "amendment",
+    "effective",
+    "transition",
+    "responsibility",
+    "applicability",
+}
+
 
 def new_id() -> str:
     return str(uuid.uuid4())
+
+
+def _norm_space(text: str) -> str:
+    return " ".join((text or "").split()).strip()
 
 
 def detect_target(text: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -94,53 +88,35 @@ def detect_special_node_type(text: str) -> tuple[Optional[str], Optional[str]]:
 
     if EFFECTIVE_RE.search(raw):
         return "effective", None
-
     if RESPONSIBILITY_RE.search(raw):
         return "responsibility", None
-
     if TRANSITION_RE.search(raw):
         return "transition", None
-
     if APPLICABILITY_RE.search(raw):
         return "applicability", None
 
     return None, None
 
 
-def _norm_space(text: str) -> str:
-    return " ".join((text or "").split()).strip()
-
-
-# ==============================
-# MAIN PARSER
-# ==============================
-
 def parse_legal_text(text: str) -> List[LegalNode]:
     nodes: List[LegalNode] = []
 
     current_section = None
     current_subsection = None
-
     current_article = None
     current_clause = None
     current_point = None
 
     section_id = None
     subsection_id = None
-
     article_id = None
     clause_id = None
     point_id = None
-
-    # neo hiện tại để các dòng text phía sau bám vào đúng node gần nhất
     current_anchor_id = None
 
-    lines = [_norm_space(l) for l in text.split("\n") if _norm_space(l)]
+    lines = [_norm_space(l) for l in str(text or "").split("\n") if _norm_space(l)]
 
     for line in lines:
-        # ---------------------------
-        # ARTICLE
-        # ---------------------------
         m = ARTICLE_RE.match(line)
         if m:
             current_article = f"Điều {m.group(1)}"
@@ -170,9 +146,6 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             )
             continue
 
-        # ---------------------------
-        # SECTION: I., II., III.
-        # ---------------------------
         m = SECTION_RE.match(line)
         if m:
             current_section = m.group(1).upper()
@@ -202,9 +175,6 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             )
             continue
 
-        # ---------------------------
-        # SUBSECTION: 2.1 / 2.2.1
-        # ---------------------------
         m = SUBSECTION_RE.match(line)
         if m:
             current_subsection = m.group(1)
@@ -213,7 +183,6 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             subsection_id = new_id()
             point_id = None
             current_anchor_id = subsection_id
-
             parent = section_id or clause_id or article_id
 
             nodes.append(
@@ -232,9 +201,6 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             )
             continue
 
-        # ---------------------------
-        # CLAUSE: 1. / 2. / 3.
-        # ---------------------------
         m = CLAUSE_RE.match(line)
         if m:
             current_clause = f"Khoản {m.group(1)}"
@@ -243,7 +209,6 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             clause_id = new_id()
             point_id = None
             current_anchor_id = clause_id
-
             parent = section_id or article_id
 
             nodes.append(
@@ -262,15 +227,11 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             )
             continue
 
-        # ---------------------------
-        # POINT: a) / b)
-        # ---------------------------
         m = POINT_RE.match(line)
         if m:
             current_point = f"Điểm {m.group(1).lower()}"
             point_id = new_id()
             current_anchor_id = point_id
-
             parent = subsection_id or clause_id or section_id or article_id
 
             nodes.append(
@@ -289,14 +250,9 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             )
             continue
 
-        # ---------------------------
-        # SPECIAL LEGAL NODE
-        # amendment / effective / responsibility / transition / applicability
-        # ---------------------------
         special_node_type, action = detect_special_node_type(line)
         if special_node_type:
             target_article, target_clause, target_point = detect_target(line)
-
             parent = point_id or subsection_id or clause_id or section_id or article_id
             special_id = new_id()
             current_anchor_id = special_id
@@ -321,14 +277,9 @@ def parse_legal_text(text: str) -> List[LegalNode]:
             )
             continue
 
-        # ---------------------------
-        # BULLET / NORMAL TEXT
-        # ---------------------------
         parent = current_anchor_id or point_id or subsection_id or clause_id or section_id or article_id
-
         node_type = "bullet" if BULLET_RE.match(line) else "text"
         legal_role = "bullet" if node_type == "bullet" else "text"
-
         nodes.append(
             LegalNode(
                 node_id=new_id(),
@@ -347,19 +298,85 @@ def parse_legal_text(text: str) -> List[LegalNode]:
     return nodes
 
 
-# ==============================
-# CHUNK BUILDER
-# ==============================
+def _children_by_parent(nodes: List[LegalNode]) -> Dict[str, List[LegalNode]]:
+    out: Dict[str, List[LegalNode]] = {}
+    for node in nodes:
+        if node.parent_id:
+            out.setdefault(node.parent_id, []).append(node)
+    return out
+
+
+def _direct_text_children(children: Dict[str, List[LegalNode]], node_id: str) -> List[str]:
+    lines: List[str] = []
+    for child in children.get(node_id, []):
+        if child.node_type in {"text", "bullet"} and child.text.strip():
+            lines.append(child.text.strip())
+    return lines
+
+
+def _descendant_outline(children: Dict[str, List[LegalNode]], node_id: str, *, max_items: int = 8) -> List[str]:
+    queue = list(children.get(node_id, []))
+    outlines: List[str] = []
+    seen: set[str] = set()
+
+    while queue and len(outlines) < max_items:
+        child = queue.pop(0)
+        if child.node_id in seen:
+            continue
+        seen.add(child.node_id)
+
+        if child.node_type in {"article", "section", "subsection", "clause", "point", *SPECIAL_NODE_TYPES}:
+            if child.text.strip():
+                outlines.append(child.text.strip())
+
+        for grand in children.get(child.node_id, []):
+            if grand.node_type in {"article", "section", "subsection", "clause", "point", *SPECIAL_NODE_TYPES}:
+                queue.append(grand)
+
+    return outlines
+
+
+def _path_parts(node: LegalNode) -> List[str]:
+    parts: List[str] = []
+    if node.section:
+        parts.append(str(node.section))
+    if node.subsection:
+        parts.append(str(node.subsection))
+    if node.article:
+        parts.append(str(node.article))
+    if node.clause:
+        parts.append(str(node.clause))
+    if node.point:
+        parts.append(str(node.point))
+    return parts
+
+
+def _build_retrieval_text(node: LegalNode, chunk_text: str, outline: List[str]) -> str:
+    header_parts = _path_parts(node)
+    header_parts.append(f"node_type: {node.node_type}")
+    if node.legal_role:
+        header_parts.append(f"legal_role: {node.legal_role}")
+    if node.action:
+        header_parts.append(f"action: {node.action}")
+    if node.target_article:
+        header_parts.append(f"target_article: {node.target_article}")
+    if node.target_clause:
+        header_parts.append(f"target_clause: {node.target_clause}")
+    if node.target_point:
+        header_parts.append(f"target_point: {node.target_point}")
+
+    blocks = [" | ".join(header_parts), chunk_text.strip()]
+    if outline:
+        blocks.append("Ngữ cảnh liên quan: " + " ; ".join(outline))
+    return "\n".join(x for x in blocks if x).strip()
+
 
 def build_chunks(nodes: List[LegalNode]) -> List[dict]:
     chunks: List[dict] = []
-
-    children_by_parent: dict[str, List[LegalNode]] = {}
-    for node in nodes:
-        if node.parent_id:
-            children_by_parent.setdefault(node.parent_id, []).append(node)
+    children = _children_by_parent(nodes)
 
     chunkable_types = {
+        "article",
         "section",
         "subsection",
         "clause",
@@ -375,14 +392,17 @@ def build_chunks(nodes: List[LegalNode]) -> List[dict]:
         if node.node_type not in chunkable_types:
             continue
 
-        parts = [node.text]
+        parts: List[str] = [node.text.strip()]
+        parts.extend(_direct_text_children(children, node.node_id))
 
-        # Gom text/bullet con trực tiếp vào cùng chunk
-        for child in children_by_parent.get(node.node_id, []):
-            if child.node_type in {"text", "bullet"} and child.text.strip():
-                parts.append(child.text.strip())
+        outline_max = 10 if node.node_type == "article" else 6
+        outline = _descendant_outline(children, node.node_id, max_items=outline_max)
 
-        chunk_text = "\n".join(parts).strip()
+        if node.node_type == "article" and outline:
+            parts.append("Cấu trúc liên quan: " + " ; ".join(outline[:6]))
+
+        chunk_text = "\n".join(p for p in parts if p).strip()
+        retrieval_text = _build_retrieval_text(node, chunk_text, outline)
 
         metadata = {
             "node_id": node.node_id,
@@ -399,11 +419,14 @@ def build_chunks(nodes: List[LegalNode]) -> List[dict]:
             "target_clause": node.target_clause,
             "target_point": node.target_point,
             "parent_id": node.parent_id,
+            "path_title": " > ".join(_path_parts(node)),
         }
 
         chunks.append(
             {
                 "text": chunk_text,
+                "retrieval_text": retrieval_text,
+                "rerank_text": retrieval_text,
                 "metadata": metadata,
             }
         )
@@ -411,14 +434,7 @@ def build_chunks(nodes: List[LegalNode]) -> List[dict]:
     return chunks
 
 
-# ==============================
-# PUBLIC WRAPPER
-# ==============================
-
 def legal_chunk(text: str, max_chars: int = 1600, overlap: int = 120) -> List[dict]:
-    """
-    Hiện chunk theo cấu trúc pháp lý trước.
-    max_chars và overlap giữ để tương thích interface cũ.
-    """
+    _ = (max_chars, overlap)
     nodes = parse_legal_text(text)
     return build_chunks(nodes)

@@ -853,8 +853,7 @@ def upsert_chunks(
 ) -> int:
     """
     Embed và upsert các chunk vào Qdrant.
-    - chunks: [{"text": "...", "metadata": {...}}, ...]
-    - meta: metadata mặc định ở mức document, merge vào metadata chunk.
+    Ưu tiên retrieval_text nếu có để vector chứa thêm title/path/legal metadata.
     """
     if not chunks:
         return 0
@@ -863,27 +862,54 @@ def upsert_chunks(
     base_meta = dict(meta or {})
 
     def _sanitize_embedding_text(value: str) -> str:
-        # Tránh ký tự control / surrogate gây lỗi encode JSON ở HTTP client.
         cleaned = safe_text(value).replace("\x00", " ")
         cleaned = "".join(ch if (ch == "\n" or ch == "\t" or ord(ch) >= 32) else " " for ch in cleaned)
         cleaned = cleaned.encode("utf-8", "ignore").decode("utf-8", "ignore")
         return _norm_space(cleaned)
+
+    def _build_retrieval_text(text_value: str, merged_meta: Dict[str, Any], chunk: Dict[str, Any]) -> str:
+        explicit = str(chunk.get("retrieval_text") or chunk.get("rerank_text") or "").strip()
+        if explicit:
+            return explicit
+
+        parts: List[str] = []
+        for key in [
+            "law_name",
+            "law_type",
+            "year",
+            "source",
+            "section",
+            "subsection",
+            "article",
+            "clause",
+            "point",
+            "node_type",
+            "legal_role",
+            "action",
+            "target_article",
+            "target_clause",
+            "target_point",
+            "path_title",
+        ]:
+            value = merged_meta.get(key)
+            if value is not None and str(value).strip():
+                parts.append(str(value).strip())
+        parts.append(text_value)
+        return "\n".join(x for x in parts if x).strip()
 
     def _embed_safe(value: str, *, chunk_id: str) -> Optional[List[float]]:
         candidates = [
             _norm_space(value),
             _sanitize_embedding_text(value),
         ]
-        # Retry cuối cùng: truncate để tránh payload quá lớn / ký tự lạ cuối chuỗi.
         if candidates[-1]:
             candidates.append(candidates[-1][:7000])
 
         tried = set()
         for text_candidate in candidates:
-            key = text_candidate
-            if not key or key in tried:
+            if not text_candidate or text_candidate in tried:
                 continue
-            tried.add(key)
+            tried.add(text_candidate)
             try:
                 return embeddings.embed_query(text_candidate)
             except Exception as exc:
@@ -902,18 +928,20 @@ def upsert_chunks(
 
         chunk_meta = dict(chunk.get("metadata") or {})
         merged_meta = {**base_meta, **chunk_meta}
-
         chunk_id = str(merged_meta.get("chunk_id") or merged_meta.get("node_id") or f"chunk_{idx}")
         merged_meta["chunk_id"] = chunk_id
-
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
 
-        vector = _embed_safe(text, chunk_id=chunk_id)
+        retrieval_text = _build_retrieval_text(text, merged_meta, chunk)
+        vector = _embed_safe(retrieval_text, chunk_id=chunk_id)
         if not vector:
             logger.error("Skip chunk due to embedding failure: chunk_id=%s", chunk_id)
             continue
+
         payload = {
             "text": text,
+            "retrieval_text": retrieval_text,
+            "rerank_text": str(chunk.get("rerank_text") or retrieval_text),
             "metadata": merged_meta,
             **merged_meta,
         }
@@ -932,3 +960,4 @@ def upsert_chunks(
     client = get_qdrant_client()
     upsert_points(client, points)
     return len(points)
+

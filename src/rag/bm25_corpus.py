@@ -2,18 +2,12 @@ from __future__ import annotations
 
 import json
 import math
-import re
 from pathlib import Path
 from typing import Any, Dict, List
 
 from src.rag.chunking_legal import legal_chunk
+from src.rag.hybrid import tokenize
 from src.utils.loader import load_document
-
-TOKEN_RE = re.compile(r"\w+", re.UNICODE)
-
-
-def tokenize(text: str) -> List[str]:
-    return [tok.lower() for tok in TOKEN_RE.findall(text or "") if tok.strip()]
 
 
 def iter_chunk_texts_from_normalized(
@@ -36,11 +30,14 @@ def iter_chunk_texts_from_normalized(
         chunks = legal_chunk(raw_text, max_chars=max_chars, overlap=overlap)
 
         for chunk in chunks:
-            if isinstance(chunk, dict):
-                text = str(chunk.get("text", "")).strip()
-            else:
+            if not isinstance(chunk, dict):
                 text = str(chunk).strip()
-
+            else:
+                text = str(
+                    chunk.get("retrieval_text")
+                    or chunk.get("text")
+                    or ""
+                ).strip()
             if text:
                 texts.append(text)
 
@@ -57,20 +54,14 @@ def build_bm25_stats_from_texts(texts: List[str]) -> Dict[str, Any]:
             continue
 
         tokenized_docs.append(tokens)
-        seen = set(tokens)
-        for tok in seen:
+        for tok in set(tokens):
             df[tok] = df.get(tok, 0) + 1
 
     n_docs = len(tokenized_docs)
     if n_docs == 0:
-        return {
-            "N": 0,
-            "avgdl": 0.0,
-            "df": {},
-            "idf": {},
-        }
+        return {"N": 0, "avgdl": 0.0, "df": {}, "idf": {}}
 
-    avgdl = sum(len(doc) for doc in tokenized_docs) / n_docs
+    avgdl = sum(len(doc) for doc in tokenized_docs) / max(n_docs, 1)
 
     idf: Dict[str, float] = {}
     for tok, freq in df.items():
@@ -78,7 +69,7 @@ def build_bm25_stats_from_texts(texts: List[str]) -> Dict[str, Any]:
 
     return {
         "N": n_docs,
-        "avgdl": avgdl,
+        "avgdl": float(avgdl),
         "df": df,
         "idf": idf,
     }
