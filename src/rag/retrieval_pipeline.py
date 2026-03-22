@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections import deque
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -364,6 +365,158 @@ def _is_summary(node: Dict[str, Any]) -> bool:
     return md.get("artifact_type") == "summary"
 
 
+_INT_RE = re.compile(r"\d+")
+_LETTER_RE = re.compile(r"([a-zA-Z])")
+
+
+def _extract_number(text: Any) -> int:
+    raw = str(text or "")
+    m = _INT_RE.search(raw)
+    if not m:
+        return 10**9
+    try:
+        return int(m.group(0))
+    except Exception:
+        return 10**9
+
+
+def _extract_letter_rank(text: Any) -> int:
+    raw = str(text or "").strip().lower()
+    m = _LETTER_RE.search(raw)
+    if not m:
+        return 10**9
+    ch = m.group(1).lower()
+    if "a" <= ch <= "z":
+        return ord(ch) - ord("a")
+    return 10**9
+
+
+def _node_sort_key(node: Dict[str, Any]) -> Tuple[int, int, int, str]:
+    md = node.get("metadata", {}) or {}
+    node_type = str(node.get("node_type") or md.get("node_type") or "").strip().lower()
+    type_rank = {
+        "article": 0,
+        "clause": 1,
+        "point": 2,
+        "bullet": 3,
+        "text": 4,
+    }.get(node_type, 9)
+
+    clause_rank = _extract_number(md.get("clause"))
+    point_rank = _extract_letter_rank(md.get("point"))
+    node_id = str(node.get("node_id") or "")
+    return (type_rank, clause_rank, point_rank, node_id)
+
+
+def _find_parent_article_node_id(graph: Dict[str, Any], start_node_id: str) -> str:
+    node_idx = _node_index(graph)
+    reverse = _reverse_adjacency(graph)
+    current = str(start_node_id)
+    visited: Set[str] = set()
+
+    while current and current not in visited:
+        visited.add(current)
+        node = node_idx.get(current, {})
+        node_type = str(node.get("node_type") or "").strip().lower()
+        if node_type == "article":
+            return current
+
+        parent_id: Optional[str] = None
+        for e in reverse.get(current, []):
+            if str(e.get("relation_type") or "").strip().upper() == "HAS_CHILD":
+                src = e.get("source_id")
+                if src:
+                    parent_id = str(src)
+                    break
+        if not parent_id:
+            break
+        current = parent_id
+
+    return str(start_node_id)
+
+
+def reorder_passages_by_article_tree(
+    graph: Dict[str, Any],
+    passages: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Nếu top hit rơi vào clause/point thì kéo parent article lên trước,
+    rồi ưu tiên các node cùng cây article theo thứ tự cấu trúc.
+    """
+    if not passages:
+        return passages
+
+    node_idx = _node_index(graph)
+    adjacency = _adjacency(graph)
+    first_id = str(passages[0].get("node_id") or "")
+    if not first_id or first_id not in node_idx:
+        return passages
+
+    article_root_id = _find_parent_article_node_id(graph, first_id)
+    if not article_root_id or article_root_id not in node_idx:
+        return passages
+
+    # Duyệt cây article bằng HAS_CHILD để biết cụm node liên quan
+    stack = [article_root_id]
+    subtree_ids: Set[str] = set()
+    while stack:
+        nid = stack.pop()
+        if nid in subtree_ids:
+            continue
+        subtree_ids.add(nid)
+        for e in adjacency.get(nid, []):
+            if str(e.get("relation_type") or "").strip().upper() != "HAS_CHILD":
+                continue
+            child = e.get("target_id")
+            if child:
+                stack.append(str(child))
+
+    original_pos = {str(p.get("node_id") or ""): i for i, p in enumerate(passages)}
+    in_subtree: List[Dict[str, Any]] = []
+    out_subtree: List[Dict[str, Any]] = []
+
+    # Luôn cố gắng đưa article root lên đầu nếu có text
+    article_node = node_idx.get(article_root_id, {})
+    article_text = str(article_node.get("text") or "").strip()
+    if article_text and article_root_id not in original_pos:
+        in_subtree.append(
+            {
+                "node_id": article_root_id,
+                "text": article_text,
+                "snippet": article_text[:700],
+                "metadata": article_node.get("metadata", {}) or {},
+                "dense_score": 0.0,
+                "hybrid_score": 0.0,
+                "graph_score": 0.0,
+                "version_bonus": 0.0,
+                "version_status": (article_node.get("metadata", {}) or {}).get("version_status"),
+                "version_event_count": int((article_node.get("metadata", {}) or {}).get("version_event_count") or 0),
+                "final_score": 0.0,
+            }
+        )
+
+    for p in passages:
+        node_id = str(p.get("node_id") or "")
+        if node_id in subtree_ids:
+            in_subtree.append(p)
+        else:
+            out_subtree.append(p)
+
+    in_subtree.sort(
+        key=lambda p: (
+            _node_sort_key(node_idx.get(str(p.get("node_id") or ""), p)),
+            original_pos.get(str(p.get("node_id") or ""), 10**9),
+        )
+    )
+    out_subtree.sort(key=lambda p: original_pos.get(str(p.get("node_id") or ""), 10**9))
+    merged = in_subtree + out_subtree
+
+    # Gắn lại rank sau reorder
+    for i, p in enumerate(merged):
+        p["rank"] = i + 1
+    return merged
+
+
 def _graph_neighbors(
     graph: Dict[str, Any],
     node_id: str,
@@ -608,6 +761,8 @@ def collect_final_passages(
         final_passages = reranked_top + remaining
     else:
         final_passages = pre_cross_passages
+
+    final_passages = reorder_passages_by_article_tree(graph, final_passages)
 
     for i, p in enumerate(final_passages):
         p["rank"] = i + 1
