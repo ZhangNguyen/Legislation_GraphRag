@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import deque
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -14,6 +15,8 @@ from src.rag.legal_versioning import annotate_graph_with_versioning
 from src.rag.openai_clients import get_embedings, get_llm
 from src.rag.rerank_cross import cross_rerank
 from src.storage.qdrant_store import get_qdrant_client, search_qdrant
+
+logger = logging.getLogger(__name__)
 
 
 STRUCTURAL_RELATIONS = {
@@ -339,6 +342,10 @@ def _node_index(graph: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return graph.get("node_index", {}) or {}
 
 
+def _normalize_node_id(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
 def _adjacency(graph: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
     return graph.get("adjacency", {}) or {}
 
@@ -390,18 +397,68 @@ def expand_graph_from_seeds(
     mode = detect_query_mode(question)
     allowed_relations = allowed_relations_for_mode(mode)
     node_idx = _node_index(graph)
+    node_idx_by_norm: Dict[str, str] = {
+        _normalize_node_id(node_id): str(node_id)
+        for node_id in node_idx.keys()
+    }
+    chunk_id_index: Dict[str, str] = {}
+    for real_node_id, node in node_idx.items():
+        md = node.get("metadata", {}) or {}
+        chunk_id = md.get("chunk_id")
+        norm_chunk_id = _normalize_node_id(chunk_id)
+        if norm_chunk_id and norm_chunk_id not in chunk_id_index:
+            chunk_id_index[norm_chunk_id] = real_node_id
 
     queue = deque()
     best_score: Dict[str, float] = {}
+    unmatched_seed_ids: List[str] = []
+    matched_seed_count = 0
 
     for item in seed_items:
-        node_id = item.get("node_id")
-        if not node_id or node_id not in node_idx:
+        raw_node_id = item.get("node_id")
+        md = item.get("metadata", {}) or {}
+        raw_chunk_id = md.get("chunk_id") if isinstance(md, dict) else None
+
+        resolved_node_id: Optional[str] = None
+        norm_node_id = _normalize_node_id(raw_node_id)
+        if norm_node_id:
+            resolved_node_id = node_idx_by_norm.get(norm_node_id)
+
+        if not resolved_node_id:
+            norm_chunk_id = _normalize_node_id(raw_chunk_id)
+            if norm_chunk_id:
+                resolved_node_id = chunk_id_index.get(norm_chunk_id)
+
+        if not resolved_node_id or resolved_node_id not in node_idx:
+            sample_id = str(raw_node_id or raw_chunk_id or "").strip()
+            if sample_id:
+                unmatched_seed_ids.append(sample_id)
             continue
 
         seed_score = float(item.get("hybrid_score", item.get("dense_score", 0.0)) or 0.0)
-        best_score[node_id] = max(best_score.get(node_id, 0.0), seed_score)
-        queue.append((node_id, 0, seed_score))
+        best_score[resolved_node_id] = max(best_score.get(resolved_node_id, 0.0), seed_score)
+        queue.append((resolved_node_id, 0, seed_score))
+        matched_seed_count += 1
+
+    adjacency_size = sum(len(v) for v in _adjacency(graph).values())
+    reverse_adjacency_size = sum(len(v) for v in _reverse_adjacency(graph).values())
+    logger.info(
+        "Graph expansion seeds: total=%s matched=%s unmatched=%s mode=%s allowed_rel=%s adjacency_edges=%s reverse_edges=%s",
+        len(seed_items),
+        matched_seed_count,
+        len(seed_items) - matched_seed_count,
+        mode,
+        sorted(list(allowed_relations)),
+        adjacency_size,
+        reverse_adjacency_size,
+    )
+    if unmatched_seed_ids:
+        logger.debug(
+            "Graph expansion unmatched seed IDs (sample): %s",
+            unmatched_seed_ids[:10],
+        )
+    if adjacency_size == 0 and reverse_adjacency_size == 0:
+        logger.warning("Graph adjacency is empty; expansion cannot traverse relations.")
 
     visited: Set[Tuple[str, int]] = set()
 
