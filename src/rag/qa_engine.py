@@ -28,6 +28,35 @@ def _norm_space(text: str) -> str:
     return " ".join((text or "").split()).strip()
 
 
+def _wants_detailed_answer(question: str) -> bool:
+    q = (question or "").lower()
+    detail_keywords = [
+        "chi tiết",
+        "cụ thể",
+        "phân tích",
+        "giải thích",
+        "ví dụ",
+        "đầy đủ",
+        "toàn văn",
+    ]
+    return any(k in q for k in detail_keywords)
+
+
+def _answer_style_instructions(question: str) -> str:
+    wants_detail = _wants_detailed_answer(question)
+    if wants_detail:
+        return (
+            "- Ưu tiên trả lời đầy đủ theo cấu trúc pháp lý (Điều -> Khoản -> Điểm nếu có).\n"
+            "- Có thể nêu thêm chi tiết quan trọng của từng mục, nhưng vẫn bám sát ngữ cảnh đã truy xuất."
+        )
+
+    return (
+        "- Trả lời ngắn gọn, bám sát trọng tâm câu hỏi; không lan man.\n"
+        "- Nếu câu hỏi yêu cầu 'quy định như thế nào' cho một Điều, hãy gom theo từng mục con (Khoản/Điểm) và tóm tắt 1 ý chính cho mỗi mục.\n"
+        "- Chỉ mở rộng giải thích chi tiết khi người dùng yêu cầu rõ."
+    )
+
+
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         if value is None or value == "":
@@ -78,6 +107,7 @@ def _build_context(passages: List[Dict[str, Any]], max_passages: int) -> str:
 
 def _build_user_prompt(question: str, passages: List[Dict[str, Any]]) -> str:
     context = _build_context(passages, settings.answer_max_context_passages)
+    answer_style = _answer_style_instructions(question)
 
     return f"""
 Câu hỏi người dùng:
@@ -91,6 +121,7 @@ Yêu cầu trả lời:
 - Nếu có thể, nêu rõ theo từng trường hợp.
 - Nếu ngữ cảnh không đủ, nói rõ giới hạn.
 - Không cần liệt kê nguồn ở cuối vì nguồn sẽ được hệ thống trả riêng.
+{answer_style}
 """.strip()
 
 
