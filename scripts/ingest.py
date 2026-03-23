@@ -91,6 +91,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from src.app.settings import settings
@@ -127,6 +128,44 @@ def _prefix_chunks(chunks: list[dict], doc_prefix: str) -> list[dict]:
     return out
 
 
+def _ingest_single_file(fp: Path, args: argparse.Namespace) -> int:
+    meta = {
+        "law_name": fp.stem,
+        "law_type": "Unknown",
+        "year": 0,
+        "source": "LocalFile",
+    }
+
+    text = load_document(fp)
+    print(f"[DEBUG] {fp.name}: text_len={len(text)}")
+
+    chunks = legal_chunk(text, max_chars=args.max_chars, overlap=args.overlap)
+    print(f"[DEBUG] {fp.name}: chunks={len(chunks)}")
+
+    if not chunks:
+        print(f"[WARN] {fp.name}: no chunks -> SKIP")
+        return 0
+
+    embeddings = get_embedings()
+    if args.semantic_merge:
+        if semantic_merge_safe is None:
+            raise RuntimeError("semantic_merge_safe not available in src.rag.chunking_legal")
+        chunks = semantic_merge_safe(
+            chunks,
+            embeddings=embeddings,
+            min_chars=args.min_chars,
+            sim_threshold=args.sim_threshold,
+            max_merged_chars=args.max_merged_chars,
+        )
+
+    doc_prefix = _slugify(fp.stem)
+    chunks = _prefix_chunks(chunks, doc_prefix)
+
+    n = upsert_chunks(chunks, embeddings=embeddings, meta=meta)
+    print(f"[OK] {fp.name}: upserted {n} chunks")
+    return int(n)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ingest legal documents into Qdrant (NO OCR).")
     parser.add_argument(
@@ -143,6 +182,12 @@ def main():
     parser.add_argument("--min_chars", type=int, default=350)
     parser.add_argument("--sim_threshold", type=float, default=0.88)
     parser.add_argument("--max_merged_chars", type=int, default=1600)
+    parser.add_argument(
+        "--upsert_workers",
+        type=int,
+        default=1,
+        help="Số luồng upsert song song theo file (vd: 4).",
+    )
 
     args = parser.parse_args()
 
@@ -156,51 +201,28 @@ def main():
     files = sorted(input_dir.glob(args.glob))
     if not files:
         raise RuntimeError(f"No files matched: {input_dir}/{args.glob}")
+    files = [fp for fp in files if fp.suffix.lower() in {".pdf", ".txt"}]
+    if not files:
+        raise RuntimeError(f"No supported files (.pdf/.txt) matched: {input_dir}/{args.glob}")
 
     client = get_qdrant_client()
     ensure_collection(client)
 
-    embeddings = get_embedings()
-
     total = 0
-    for fp in files:
-        if fp.suffix.lower() not in {".pdf", ".txt"}:
-            continue
-
-        meta = {
-            "law_name": fp.stem,
-            "law_type": "Unknown",
-            "year": 0,
-            "source": "LocalFile",
-        }
-
-        text = load_document(fp)
-        print(f"[DEBUG] {fp.name}: text_len={len(text)}")
-
-        chunks = legal_chunk(text, max_chars=args.max_chars, overlap=args.overlap)
-        print(f"[DEBUG] {fp.name}: chunks={len(chunks)}")
-
-        if not chunks:
-            print(f"[WARN] {fp.name}: no chunks -> SKIP")
-            continue
-
-        if args.semantic_merge:
-            if semantic_merge_safe is None:
-                raise RuntimeError("semantic_merge_safe not available in src.rag.chunking_legal")
-            chunks = semantic_merge_safe(
-                chunks,
-                embeddings=embeddings,
-                min_chars=args.min_chars,
-                sim_threshold=args.sim_threshold,
-                max_merged_chars=args.max_merged_chars,
-            )
-
-        doc_prefix = _slugify(fp.stem)
-        chunks = _prefix_chunks(chunks, doc_prefix)
-
-        n = upsert_chunks(chunks, embeddings=embeddings, meta=meta)
-        print(f"[OK] {fp.name}: upserted {n} chunks")
-        total += int(n)
+    workers = max(1, int(args.upsert_workers))
+    if workers == 1:
+        for fp in files:
+            total += _ingest_single_file(fp, args)
+    else:
+        print(f"[INFO] Running upsert with {workers} workers")
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_ingest_single_file, fp, args): fp for fp in files}
+            for future in as_completed(futures):
+                fp = futures[future]
+                try:
+                    total += int(future.result())
+                except Exception as exc:
+                    print(f"[ERROR] {fp.name}: {exc}")
 
     print("DONE. Total chunks:", total)
 
