@@ -70,13 +70,15 @@ def chat(req: ChatRequestModel) -> Dict[str, Any]:
     }
 
     if req.include_debug:
+        all_passages = retrieval_result.get("passages", []) or []
         result["debug"] = {
             "filters": retrieval_result.get("filters", {}),
             "mode": retrieval_result.get("mode"),
             "qdrant_top_k": retrieval_result.get("qdrant_top_k"),
             "final_top_k": retrieval_result.get("final_top_k"),
             "cross_top_k": retrieval_result.get("cross_top_k"),
-            "top_passages": retrieval_result.get("passages", [])[:5],
+            "passages_count": len(all_passages),
+            "top_passages": all_passages,
         }
 
     return result
