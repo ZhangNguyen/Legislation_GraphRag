@@ -420,47 +420,121 @@ def _rrf_fuse(rank_lists: List[List[Dict[str, Any]]], *, k: int = 60) -> Dict[st
             scores[node_id] = scores.get(node_id, 0.0) + 1.0 / (k + rank)
     return scores
 
-
 def _merge_variant_candidates(rank_lists: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     fused = _rrf_fuse(rank_lists)
     merged: Dict[str, Dict[str, Any]] = {}
 
+    def _safe_float(x: Any) -> float:
+        try:
+            return float(x or 0.0)
+        except Exception:
+            return 0.0
+
+    def _text_len(x: Any) -> int:
+        return len(str(x or "").strip())
+
+    def _candidate_quality(item: Dict[str, Any]) -> tuple:
+        """
+        So sánh 2 version của cùng một node_id.
+        Ưu tiên:
+        1) cross_score
+        2) scope_score
+        3) dense_score
+        4) retrieval_text dài hơn một chút
+        5) text dài hơn một chút
+        """
+        return (
+            _safe_float(item.get("cross_score")),
+            _safe_float(item.get("scope_score")),
+            _safe_float(item.get("dense_score")),
+            _text_len(item.get("retrieval_text")),
+            _text_len(item.get("text")),
+        )
+
+    def _maybe_prefer_better_text(base: Dict[str, Any], item: Dict[str, Any]) -> None:
+        """
+        Chỉ cập nhật phần text/payload nếu version mới thực sự tốt hơn.
+        Không dùng rule 'text dài hơn thì thắng' nữa.
+        """
+        if _candidate_quality(item) > _candidate_quality(base):
+            base["text"] = item.get("text")
+            base["snippet"] = item.get("snippet")
+            base["retrieval_text"] = item.get("retrieval_text")
+            base["rerank_text"] = item.get("rerank_text")
+            base["metadata"] = item.get("metadata")
+            base["payload"] = item.get("payload")
+            base["best_cross_score"] = _safe_float(item.get("cross_score"))
+            base["best_scope_score"] = _safe_float(item.get("scope_score"))
+
     for variant_idx, ranked in enumerate(rank_lists):
         for rank, item in enumerate(ranked, start=1):
-            node_id = str(item.get("node_id") or "")
+            node_id = str(item.get("node_id") or "").strip()
             if not node_id:
                 continue
-            base = merged.get(node_id)
-            if base is None:
+
+            if node_id not in merged:
                 base = dict(item)
-                base["variant_hits"] = 0
-                base["variant_ranks"] = []
-                base["max_dense_score"] = float(item.get("dense_score", 0.0) or 0.0)
+                base["variant_hits"] = 1
+                base["variant_ranks"] = [{"variant_index": variant_idx, "rank": rank}]
+                base["max_dense_score"] = _safe_float(item.get("dense_score"))
+                base["best_cross_score"] = _safe_float(item.get("cross_score"))
+                base["best_scope_score"] = _safe_float(item.get("scope_score"))
+                base["all_texts"] = []
+                if item.get("text"):
+                    base["all_texts"].append(str(item.get("text")))
                 merged[node_id] = base
+                continue
+
+            base = merged[node_id]
 
             base["variant_hits"] += 1
             base["variant_ranks"].append({"variant_index": variant_idx, "rank": rank})
             base["max_dense_score"] = max(
-                float(base.get("max_dense_score", 0.0) or 0.0),
-                float(item.get("dense_score", 0.0) or 0.0),
+                _safe_float(base.get("max_dense_score")),
+                _safe_float(item.get("dense_score")),
             )
-            if len(str(item.get("text") or "")) > len(str(base.get("text") or "")):
-                base["text"] = item.get("text")
-                base["snippet"] = item.get("snippet")
-                base["retrieval_text"] = item.get("retrieval_text")
-                base["rerank_text"] = item.get("rerank_text")
-                base["metadata"] = item.get("metadata")
-                base["payload"] = item.get("payload")
+            base["best_cross_score"] = max(
+                _safe_float(base.get("best_cross_score")),
+                _safe_float(item.get("cross_score")),
+            )
+            base["best_scope_score"] = max(
+                _safe_float(base.get("best_scope_score")),
+                _safe_float(item.get("scope_score")),
+            )
 
-    out = []
+            txt = str(item.get("text") or "").strip()
+            if txt and txt not in base["all_texts"]:
+                base["all_texts"].append(txt)
+
+            # Chỉ thay text nếu candidate mới tốt hơn thật sự
+            _maybe_prefer_better_text(base, item)
+
+            # Nếu retrieval_text hiện tại quá ngắn mà item mới có retrieval_text tốt hơn,
+            # thì cập nhật riêng retrieval_text nhưng không phá toàn bộ base
+            if _text_len(item.get("retrieval_text")) > _text_len(base.get("retrieval_text")):
+                base["retrieval_text"] = item.get("retrieval_text")
+            if _text_len(item.get("rerank_text")) > _text_len(base.get("rerank_text")):
+                base["rerank_text"] = item.get("rerank_text")
+
+    out: List[Dict[str, Any]] = []
     for node_id, item in merged.items():
-        item["rrf_score"] = float(fused.get(node_id, 0.0))
-        item["dense_score"] = float(item.get("max_dense_score", 0.0) or 0.0)
+        item["rrf_score"] = _safe_float(fused.get(node_id, 0.0))
+        item["dense_score"] = _safe_float(item.get("max_dense_score", 0.0))
+        item["cross_score"] = _safe_float(item.get("best_cross_score", 0.0))
+        item["scope_score"] = _safe_float(item.get("best_scope_score", 0.0))
         out.append(item)
 
-    out.sort(key=lambda x: (float(x.get("rrf_score", 0.0)), float(x.get("dense_score", 0.0))), reverse=True)
+    out.sort(
+        key=lambda x: (
+            _safe_float(x.get("rrf_score")),
+            _safe_float(x.get("cross_score")),
+            _safe_float(x.get("scope_score")),
+            _safe_float(x.get("dense_score")),
+            int(x.get("variant_hits", 0)),
+        ),
+        reverse=True,
+    )
     return out
-
 
 def retrieve_seed_candidates(
     question: str,
