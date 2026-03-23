@@ -59,8 +59,31 @@ def _safe_int(value: Any, default: int = 0) -> int:
 
 
 def _doc_key_from_md(md: Dict[str, Any]) -> str:
-    return str(md.get("source") or md.get("law_name") or "unknown").strip().lower()
+    law_name = str(md.get("law_name") or "").strip().lower()
+    if law_name:
+        return law_name
 
+    document_id = str(md.get("document_id") or "").strip().lower()
+    if document_id:
+        return document_id
+
+    file_name = str(md.get("file_name") or md.get("filename") or "").strip().lower()
+    if file_name:
+        return file_name
+
+    chunk_id = str(md.get("chunk_id") or "").strip().lower()
+    if "::" in chunk_id:
+        return chunk_id.split("::")[0]
+
+    source_path = str(md.get("source_path") or md.get("file_path") or "").strip().lower()
+    if source_path:
+        return source_path
+
+    source = str(md.get("source") or "").strip().lower()
+    if source:
+        return source
+
+    return "unknown"
 
 def _group_passages_for_llm(passages: List[Dict[str, Any]], max_units: int) -> List[Dict[str, Any]]:
     grouped: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
@@ -210,3 +233,27 @@ def build_chat_response(
         sources.append(src)
 
     return ChatResponse(answer=answer, sources=sources)
+
+def answer_with_rag(
+    question: str,
+    retrieval_result: Dict[str, Any],
+    *,
+    response_mode: str | None = None,
+) -> ChatResponse:
+    """
+    Backward-compatible entrypoint used by the API layer.
+
+    The retrieval pipeline returns a dict that contains passages and optional
+    tuning parameters. This adapter extracts those fields and delegates to
+    ``build_chat_response``.
+    """
+    retrieval_result = retrieval_result or {}
+    passages = retrieval_result.get("passages", []) or []
+
+    return build_chat_response(
+        question=question,
+        passages=passages,
+        max_context_passages=retrieval_result.get("final_top_k"),
+        max_source_items=retrieval_result.get("final_top_k"),
+        response_mode=response_mode or retrieval_result.get("mode"),
+    )

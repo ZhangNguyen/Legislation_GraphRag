@@ -320,13 +320,31 @@ def _extract_node_id_from_payload(payload: Dict[str, Any]) -> Optional[str]:
 
 
 def _candidate_doc_key(metadata: Dict[str, Any]) -> str:
-    source = str(metadata.get("source") or "").strip()
-    if source:
-        return source.lower()
     law_name = str(metadata.get("law_name") or "").strip().lower()
-    year = str(metadata.get("year") or "").strip().lower()
-    return "|".join(x for x in [law_name, year] if x) or "unknown"
+    if law_name:
+        return law_name
 
+    document_id = str(metadata.get("document_id") or "").strip().lower()
+    if document_id:
+        return document_id
+
+    file_name = str(metadata.get("file_name") or metadata.get("filename") or "").strip().lower()
+    if file_name:
+        return file_name
+
+    chunk_id = str(metadata.get("chunk_id") or "").strip().lower()
+    if "::" in chunk_id:
+        return chunk_id.split("::")[0]
+
+    source_path = str(metadata.get("source_path") or metadata.get("file_path") or "").strip().lower()
+    if source_path:
+        return source_path
+
+    source = str(metadata.get("source") or "").strip().lower()
+    if source:
+        return source
+
+    return "unknown"
 
 def _build_runtime_retrieval_text(text: str, metadata: Dict[str, Any], payload: Optional[Dict[str, Any]] = None) -> str:
     payload = payload or {}
