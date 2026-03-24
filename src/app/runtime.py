@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import re
@@ -16,7 +17,11 @@ from src.rag.openai_clients import get_embedings
 from src.storage.qdrant_store import ensure_collection, get_qdrant_client
 from src.utils.loader import load_document
 
-logger = logging.getLogger(__name__)
+try:
+    from src.rag.chunking_legal import semantic_merge_safe
+except Exception:
+    semantic_merge_safe = None
+
 
 _RUNTIME: Dict[str, Any] = {
     "graph": None,
@@ -26,6 +31,8 @@ _RUNTIME: Dict[str, Any] = {
     "last_reindex_seconds": None,
     "graph_build_in_progress": False,
 }
+
+logger = logging.getLogger(__name__)
 
 
 def _norm_space(text: str) -> str:
@@ -39,6 +46,50 @@ def _slugify(text: str) -> str:
     return raw or "doc"
 
 
+def _build_adjacency(edges: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    adj: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for e in edges:
+        src = e.get("source_id")
+        if src:
+            adj[str(src)].append(e)
+    return dict(adj)
+
+
+def _build_reverse_adjacency(edges: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    rev: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for e in edges:
+        tgt = e.get("target_id")
+        if tgt:
+            rev[str(tgt)].append(e)
+    return dict(rev)
+
+
+def _dedup_nodes(nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: Dict[str, Dict[str, Any]] = {}
+    for n in nodes:
+        node_id = n.get("node_id")
+        if not node_id:
+            continue
+        out[str(node_id)] = n
+    return list(out.values())
+
+
+def _dedup_edges(edges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    out: List[Dict[str, Any]] = []
+    for e in edges:
+        sig = (
+            str(e.get("source_id", "")).strip().lower(),
+            str(e.get("target_id", "")).strip().lower(),
+            str(e.get("relation_type", "")).strip().lower(),
+        )
+        if sig in seen:
+            continue
+        seen.add(sig)
+        out.append(e)
+    return out
+
+
 def _snapshot_path() -> Path:
     p = Path(settings.graph_snapshot_path)
     if not p.is_absolute():
@@ -46,23 +97,48 @@ def _snapshot_path() -> Path:
     return p
 
 
-def _build_sibling_map(parent_to_children: Dict[str, List[str]]) -> Dict[str, List[str]]:
-    sibling_map: Dict[str, List[str]] = {}
-    for _, children in parent_to_children.items():
-        for child in children:
-            sibling_map[child] = [x for x in children if x != child]
-    return sibling_map
+def _node_aliases(node: Dict[str, Any]) -> List[str]:
+    md = dict(node.get("metadata") or {})
+    aliases: List[str] = []
+    for raw in [
+        node.get("node_id"),
+        md.get("node_id"),
+        md.get("chunk_id"),
+        md.get("source_node_id"),
+    ]:
+        val = str(raw or "").strip()
+        if val:
+            aliases.append(val)
+    # Dedup while preserving order
+    seen = set()
+    out: List[str] = []
+    for alias in aliases:
+        if alias in seen:
+            continue
+        seen.add(alias)
+        out.append(alias)
+    return out
 
 
-def _save_graph_snapshot(graph: Dict[str, Any]) -> None:
+def _build_alias_index(nodes: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    alias_index: Dict[str, Dict[str, Any]] = {}
+    for node in nodes:
+        for alias in _node_aliases(node):
+            alias_index.setdefault(alias, node)
+    return alias_index
+
+
+def _save_graph_snapshot(graph: Dict[str, Any]) -> Path:
     p = _snapshot_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "nodes": graph.get("nodes", []),
-        "edges": graph.get("edges", []),
-        "doc_index": graph.get("doc_index", {}),
+        "nodes": list(graph.get("nodes", [])),
+        "edges": list(graph.get("edges", [])),
+        "doc_index": dict(graph.get("doc_index", {})),
     }
     p.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    logger.info("Graph snapshot saved: %s", p)
+    return p
 
 
 def _load_graph_snapshot() -> Optional[Dict[str, Any]]:
@@ -71,32 +147,54 @@ def _load_graph_snapshot() -> Optional[Dict[str, Any]]:
         return None
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Cannot read graph snapshot %s: %s", p, exc)
         return None
     nodes = list(raw.get("nodes", []))
     edges = list(raw.get("edges", []))
-    doc_index = dict(raw.get("doc_index", {}))
     if not nodes:
         return None
-    node_index = {str(n["node_id"]): n for n in nodes if n.get("node_id")}
+    doc_index = dict(raw.get("doc_index", {}))
+    # Rebuild parent/sibling metadata if missing
     parent_to_children: Dict[str, List[str]] = defaultdict(list)
-    for node in nodes:
-        md = node.get("metadata", {}) or {}
+    for n in nodes:
+        md = dict(n.get("metadata") or {})
         parent_id = md.get("parent_id")
         if parent_id:
-            parent_to_children[str(parent_id)].append(str(node["node_id"]))
-    sibling_map = _build_sibling_map(parent_to_children)
-    for node_id, node in node_index.items():
-        md = node.setdefault("metadata", {})
-        md["children_ids"] = parent_to_children.get(node_id, [])
-        md["sibling_ids"] = sibling_map.get(node_id, [])
+            parent_to_children[str(parent_id)].append(str(n.get("node_id")))
+        doc_id = str(md.get("doc_id") or "")
+        if doc_id and doc_id not in doc_index:
+            doc_index[doc_id] = {
+                "doc_id": doc_id,
+                "official_title": md.get("official_title") or md.get("law_name") or "",
+                "doc_type": md.get("doc_type") or md.get("law_type") or "Unknown",
+                "law_name": md.get("law_name") or md.get("official_title") or "",
+                "law_type": md.get("law_type") or md.get("doc_type") or "Unknown",
+                "source": md.get("source") or md.get("issuing_agency") or "LocalFile",
+                "year": md.get("year") or 0,
+                "lead_block": md.get("lead_block") or "",
+                "doc_number": md.get("doc_number"),
+                "issuing_agency": md.get("issuing_agency"),
+            }
+    sibling_map: Dict[str, List[str]] = {}
+    for _, children in parent_to_children.items():
+        for child in children:
+            sibling_map[child] = [x for x in children if x != child]
+    for n in nodes:
+        md = n.setdefault("metadata", {})
+        node_id = str(n.get("node_id") or "")
+        md["children_ids"] = parent_to_children.get(node_id, md.get("children_ids", []))
+        md["sibling_ids"] = sibling_map.get(node_id, md.get("sibling_ids", []))
+    node_index = {str(n["node_id"]): n for n in nodes if n.get("node_id")}
+    alias_index = _build_alias_index(nodes)
     return {
         "nodes": nodes,
         "edges": edges,
         "node_index": node_index,
+        "alias_index": alias_index,
         "doc_index": doc_index,
-        "parent_to_children": dict(parent_to_children),
-        "sibling_map": sibling_map,
+        "adjacency": _build_adjacency(edges),
+        "reverse_adjacency": _build_reverse_adjacency(edges),
     }
 
 
@@ -118,17 +216,54 @@ def preload_runtime_graph_from_snapshot() -> bool:
     return True
 
 
+def _prefix_chunks(chunks: List[Dict[str, Any]], doc_prefix: str, *, doc_meta: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for ch in chunks:
+        item = dict(ch)
+        md = dict(item.get("metadata", {}) or {})
+
+        for key in ["node_id", "chunk_id", "parent_id"]:
+            val = md.get(key)
+            if val:
+                md[key] = f"{doc_prefix}::{val}"
+
+        for list_key in ["children_ids", "sibling_ids"]:
+            vals = md.get(list_key)
+            if isinstance(vals, list):
+                md[list_key] = [f"{doc_prefix}::{x}" for x in vals if x]
+
+        md["doc_id"] = doc_prefix
+        if doc_meta:
+            for k, v in doc_meta.items():
+                if md.get(k) in (None, "") and v not in (None, ""):
+                    md[k] = v
+
+        item["metadata"] = md
+        out.append(item)
+    return out
+
+
+def _build_sibling_map(parent_to_children: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    sibling_map: Dict[str, List[str]] = {}
+    for _, children in parent_to_children.items():
+        for child in children:
+            sibling_map[child] = [x for x in children if x != child]
+    return sibling_map
+
+
 def build_runtime_graph(
     input_dir: Optional[str] = None,
     glob_pattern: Optional[str] = None,
     *,
-    max_workers: int = 1,
+    max_workers: int = 4,
 ) -> Dict[str, Any]:
     _ = max_workers
     start = time.perf_counter()
     _RUNTIME["graph_build_in_progress"] = True
+
     input_dir = input_dir or settings.normalized_dir
     glob_pattern = glob_pattern or settings.normalized_glob
+    logger.info("Graph build started: input_dir=%s glob=%s", input_dir, glob_pattern)
 
     base = Path(input_dir)
     if not base.exists():
@@ -137,70 +272,73 @@ def build_runtime_graph(
     try:
         nodes: List[Dict[str, Any]] = []
         edges: List[Dict[str, Any]] = []
-        node_index: Dict[str, Dict[str, Any]] = {}
         doc_index: Dict[str, Dict[str, Any]] = {}
         parent_to_children: Dict[str, List[str]] = defaultdict(list)
 
         for fp in sorted(base.glob(glob_pattern)):
             if fp.suffix.lower() not in {".pdf", ".txt"}:
                 continue
+
             text = load_document(fp)
             header = extract_document_header(text, fallback_name=fp.stem)
-            doc_index[header.doc_id] = header.to_metadata()
-            doc_index[header.doc_id]["file_name"] = fp.name
-            doc_index[header.doc_id]["source_path"] = str(fp)
+            doc_prefix = _slugify(fp.stem)
+            doc_meta = header.to_metadata()
+            doc_meta["doc_id"] = doc_prefix
+            doc_meta["file_name"] = fp.name
+            doc_meta["source_path"] = str(fp)
+            doc_index[doc_prefix] = doc_meta
 
             chunks = legal_chunk(text, fallback_doc_name=fp.stem)
+            chunks = _prefix_chunks(chunks, doc_prefix, doc_meta=doc_meta)
+
             for ch in chunks:
                 md = dict(ch.get("metadata") or {})
-                node_id = str(md.get("node_id") or md.get("chunk_id"))
-                parent_id = md.get("parent_id")
+                node_id = str(md.get("node_id") or md.get("chunk_id") or "")
+                if not node_id:
+                    continue
                 node = {
                     "node_id": node_id,
                     "node_type": md.get("node_type") or "text",
                     "text": str(ch.get("text") or "").strip(),
-                    "retrieval_text": str(ch.get("retrieval_text") or "").strip(),
-                    "rerank_text": str(ch.get("rerank_text") or ch.get("retrieval_text") or "").strip(),
+                    "retrieval_text": str(ch.get("retrieval_text") or ch.get("text") or "").strip(),
+                    "rerank_text": str(ch.get("rerank_text") or ch.get("retrieval_text") or ch.get("text") or "").strip(),
                     "metadata": md,
                 }
                 nodes.append(node)
-                node_index[node_id] = node
+                parent_id = md.get("parent_id")
                 if parent_id:
-                    edges.append({"source_id": parent_id, "target_id": node_id, "relation_type": "HAS_CHILD"})
+                    edges.append({"source_id": str(parent_id), "target_id": node_id, "relation_type": "HAS_CHILD"})
                     parent_to_children[str(parent_id)].append(node_id)
 
+        nodes = _dedup_nodes(nodes)
+        edges = _dedup_edges(edges)
         sibling_map = _build_sibling_map(parent_to_children)
+        node_index = {str(n["node_id"]): n for n in nodes if n.get("node_id")}
         for node_id, node in node_index.items():
             md = node.setdefault("metadata", {})
             md["children_ids"] = parent_to_children.get(node_id, md.get("children_ids", []))
             md["sibling_ids"] = sibling_map.get(node_id, md.get("sibling_ids", []))
-            if md.get("doc_id") and md["doc_id"] in doc_index:
-                for key in [
-                    "official_title",
-                    "doc_type",
-                    "law_name",
-                    "law_type",
-                    "source",
-                    "year",
-                    "lead_block",
-                    "doc_number",
-                    "issuing_agency",
-                ]:
-                    if md.get(key) in (None, ""):
-                        val = doc_index[md["doc_id"]].get(key)
-                        if val not in (None, ""):
-                            md[key] = val
-
+            doc_id = str(md.get("doc_id") or "")
+            if doc_id in doc_index:
+                for key, val in doc_index[doc_id].items():
+                    if md.get(key) in (None, "") and val not in (None, ""):
+                        md[key] = val
+        alias_index = _build_alias_index(nodes)
         graph = {
             "nodes": nodes,
             "edges": edges,
             "node_index": node_index,
+            "alias_index": alias_index,
             "doc_index": doc_index,
-            "parent_to_children": dict(parent_to_children),
-            "sibling_map": sibling_map,
+            "adjacency": _build_adjacency(edges),
+            "reverse_adjacency": _build_reverse_adjacency(edges),
         }
         _apply_runtime_graph(graph, built_seconds=time.perf_counter() - start)
         _save_graph_snapshot(graph)
+        logger.info(
+            "Graph build finished: docs=%s nodes=%s edges=%s aliases=%s took=%.2fs",
+            len(doc_index), len(nodes), len(edges), len(alias_index), _RUNTIME["last_graph_build_seconds"]
+        )
         return graph
     finally:
         _RUNTIME["graph_build_in_progress"] = False
@@ -215,13 +353,14 @@ def ensure_runtime_graph() -> Dict[str, Any]:
 
 
 def get_runtime_status() -> Dict[str, Any]:
-    graph = _RUNTIME["graph"] or {}
+    graph = _RUNTIME["graph"]
     return {
-        "graph_loaded": _RUNTIME["graph"] is not None,
+        "graph_loaded": graph is not None,
         "graph_loaded_at": _RUNTIME["graph_loaded_at"],
         "graph_doc_count": _RUNTIME["graph_doc_count"],
-        "graph_node_count": len(graph.get("nodes", [])),
-        "graph_edge_count": len(graph.get("edges", [])),
+        "graph_node_count": len((graph or {}).get("nodes", [])),
+        "graph_edge_count": len((graph or {}).get("edges", [])),
+        "graph_alias_count": len((graph or {}).get("alias_index", {})),
         "last_graph_build_seconds": _RUNTIME["last_graph_build_seconds"],
         "last_reindex_seconds": _RUNTIME["last_reindex_seconds"],
         "graph_build_in_progress": _RUNTIME["graph_build_in_progress"],
@@ -242,6 +381,7 @@ def save_current_runtime_graph_snapshot(force_build: bool = False) -> Dict[str, 
         "snapshot_exists": _snapshot_path().exists(),
         "graph_nodes": len(graph.get("nodes", [])),
         "graph_edges": len(graph.get("edges", [])),
+        "graph_aliases": len(graph.get("alias_index", {})),
     }
 
 
@@ -256,8 +396,8 @@ def reindex_qdrant_from_normalized(
     max_chars: int = 1600,
     overlap: int = 120,
 ) -> Dict[str, Any]:
-    _ = (semantic_merge, min_chars, sim_threshold, max_merged_chars, max_chars, overlap)
     start = time.perf_counter()
+
     input_dir = input_dir or settings.normalized_dir
     glob_pattern = glob_pattern or settings.normalized_glob
 
@@ -271,13 +411,36 @@ def reindex_qdrant_from_normalized(
 
     total_chunks = 0
     total_docs = 0
+
     for fp in sorted(base.glob(glob_pattern)):
         if fp.suffix.lower() not in {".pdf", ".txt"}:
             continue
+
         text = load_document(fp)
         header = extract_document_header(text, fallback_name=fp.stem)
-        chunks = legal_chunk(text, fallback_doc_name=fp.stem)
-        total_chunks += int(upsert_chunks(chunks, embeddings=embeddings, meta=header.to_metadata()))
+        doc_title = fp.stem
+        doc_prefix = _slugify(doc_title)
+        doc_meta = header.to_metadata()
+        doc_meta["doc_id"] = doc_prefix
+
+        chunks = legal_chunk(text, max_chars=max_chars, overlap=overlap, fallback_doc_name=fp.stem)
+        if not chunks:
+            continue
+
+        if semantic_merge:
+            if semantic_merge_safe is None:
+                raise RuntimeError("semantic_merge_safe not available in src.rag.chunking_legal")
+            chunks = semantic_merge_safe(
+                chunks,
+                embeddings=embeddings,
+                min_chars=min_chars,
+                sim_threshold=sim_threshold,
+                max_merged_chars=max_merged_chars,
+            )
+
+        chunks = _prefix_chunks(chunks, doc_prefix, doc_meta=doc_meta)
+        n = upsert_chunks(chunks, embeddings=embeddings, meta=doc_meta)
+        total_chunks += int(n)
         total_docs += 1
 
     _RUNTIME["last_reindex_seconds"] = time.perf_counter() - start
@@ -288,12 +451,21 @@ def reindex_qdrant_from_normalized(
     }
 
 
-def rebuild_everything(input_dir: Optional[str] = None, glob_pattern: Optional[str] = None) -> Dict[str, Any]:
-    qdrant_info = reindex_qdrant_from_normalized(input_dir=input_dir, glob_pattern=glob_pattern)
-    graph = build_runtime_graph(input_dir=input_dir, glob_pattern=glob_pattern)
+def rebuild_everything(
+    input_dir: Optional[str] = None,
+    glob_pattern: Optional[str] = None,
+) -> Dict[str, Any]:
+    qdrant_info = reindex_qdrant_from_normalized(
+        input_dir=input_dir,
+        glob_pattern=glob_pattern,
+    )
+    graph = build_runtime_graph(
+        input_dir=input_dir,
+        glob_pattern=glob_pattern,
+    )
     return {
         "qdrant": qdrant_info,
         "graph_nodes": len(graph.get("nodes", [])),
         "graph_edges": len(graph.get("edges", [])),
-        "docs": _RUNTIME["graph_doc_count"],
+        "status": get_runtime_status(),
     }

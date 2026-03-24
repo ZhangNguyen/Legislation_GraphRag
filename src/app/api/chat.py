@@ -71,14 +71,31 @@ def chat(req: ChatRequestModel) -> Dict[str, Any]:
 
     if req.include_debug:
         all_passages = retrieval_result.get("passages", []) or []
+        all_seeds = retrieval_result.get("seed_candidates", []) or []
+
         result["debug"] = {
             "filters": retrieval_result.get("filters", {}),
             "mode": retrieval_result.get("mode"),
+            "query_profile": retrieval_result.get("query_profile", {}),
             "qdrant_top_k": retrieval_result.get("qdrant_top_k"),
             "final_top_k": retrieval_result.get("final_top_k"),
             "cross_top_k": retrieval_result.get("cross_top_k"),
+
+            "seed_candidates_count": len(all_seeds),
+            "seed_candidate_ids": [
+                x.get("node_id") for x in all_seeds[:10]
+            ],
+            "seed_candidates_preview": [
+                {
+                    "node_id": x.get("node_id"),
+                    "dense_score": x.get("dense_score"),
+                    "hybrid_score": x.get("hybrid_score"),
+                    "text": str(x.get("text") or "")[:120],
+                }
+                for x in all_seeds[:5]
+            ],
+
             "passages_count": len(all_passages),
             "top_passages": all_passages,
         }
-
     return result
