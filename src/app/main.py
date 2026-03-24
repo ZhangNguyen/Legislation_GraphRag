@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 
 from src.app.api.router import api_router
-from src.app.runtime import preload_runtime_graph_from_snapshot
+from src.app.runtime import preload_runtime_on_startup
 from src.app.settings import settings
 
 app = FastAPI(title="Legislation RAG", version="0.2.0")
@@ -41,5 +41,9 @@ def health():
 
 
 @app.on_event("startup")
-def startup_preload_graph_snapshot() -> None:
-    preload_runtime_graph_from_snapshot()
+async def startup_event():
+    preload_runtime_on_startup(
+        preload_graph_snapshot=True,
+        build_graph_if_missing=True,
+        warm_services=True,
+    )

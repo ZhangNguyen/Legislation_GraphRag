@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import copy
 import json
 import logging
 import re
 import time
 from collections import defaultdict
 from pathlib import Path
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from src.app.settings import settings
 from src.rag.chunking_legal import legal_chunk
 from src.rag.document_header import extract_document_header
 from src.rag.ingestion import upsert_chunks
-from src.rag.openai_clients import get_embedings
+from src.rag.openai_clients import get_embedings, get_llm
 from src.storage.qdrant_store import ensure_collection, get_qdrant_client
 from src.utils.loader import load_document
 
@@ -21,6 +21,11 @@ try:
     from src.rag.chunking_legal import semantic_merge_safe
 except Exception:
     semantic_merge_safe = None
+
+try:
+    from src.rag.rerank_cross import get_cross_encoder
+except Exception:
+    get_cross_encoder = None
 
 
 _RUNTIME: Dict[str, Any] = {
@@ -30,9 +35,20 @@ _RUNTIME: Dict[str, Any] = {
     "last_graph_build_seconds": None,
     "last_reindex_seconds": None,
     "graph_build_in_progress": False,
+    "services_warmed_up": False,
+    "services_warmup_in_progress": False,
+    "last_services_warmup_seconds": None,
+    "startup_preload_completed": False,
+    "startup_preload_at": None,
+    "last_startup_preload_seconds": None,
+    "warmup_last_error": None,
 }
 
 logger = logging.getLogger(__name__)
+_RUNTIME_LOCK = Lock()
+
+SUMMARY_EDGE = "HAS_CHILD_SUMMARY"
+SUMMARIZES_EDGE = "SUMMARIZES"
 
 
 def _norm_space(text: str) -> str:
@@ -109,7 +125,6 @@ def _node_aliases(node: Dict[str, Any]) -> List[str]:
         val = str(raw or "").strip()
         if val:
             aliases.append(val)
-    # Dedup while preserving order
     seen = set()
     out: List[str] = []
     for alias in aliases:
@@ -126,6 +141,16 @@ def _build_alias_index(nodes: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]
         for alias in _node_aliases(node):
             alias_index.setdefault(alias, node)
     return alias_index
+
+
+def _rebuild_runtime_maps(graph: Dict[str, Any]) -> Dict[str, Any]:
+    nodes = list(graph.get("nodes", []))
+    edges = list(graph.get("edges", []))
+    graph["node_index"] = {str(n["node_id"]): n for n in nodes if n.get("node_id")}
+    graph["alias_index"] = _build_alias_index(nodes)
+    graph["adjacency"] = _build_adjacency(edges)
+    graph["reverse_adjacency"] = _build_reverse_adjacency(edges)
+    return graph
 
 
 def _save_graph_snapshot(graph: Dict[str, Any]) -> Path:
@@ -150,12 +175,13 @@ def _load_graph_snapshot() -> Optional[Dict[str, Any]]:
     except Exception as exc:
         logger.warning("Cannot read graph snapshot %s: %s", p, exc)
         return None
+
     nodes = list(raw.get("nodes", []))
     edges = list(raw.get("edges", []))
     if not nodes:
         return None
+
     doc_index = dict(raw.get("doc_index", {}))
-    # Rebuild parent/sibling metadata if missing
     parent_to_children: Dict[str, List[str]] = defaultdict(list)
     for n in nodes:
         md = dict(n.get("metadata") or {})
@@ -185,17 +211,15 @@ def _load_graph_snapshot() -> Optional[Dict[str, Any]]:
         node_id = str(n.get("node_id") or "")
         md["children_ids"] = parent_to_children.get(node_id, md.get("children_ids", []))
         md["sibling_ids"] = sibling_map.get(node_id, md.get("sibling_ids", []))
-    node_index = {str(n["node_id"]): n for n in nodes if n.get("node_id")}
-    alias_index = _build_alias_index(nodes)
-    return {
+
+    graph = {
         "nodes": nodes,
         "edges": edges,
-        "node_index": node_index,
-        "alias_index": alias_index,
         "doc_index": doc_index,
-        "adjacency": _build_adjacency(edges),
-        "reverse_adjacency": _build_reverse_adjacency(edges),
     }
+    graph = _augment_graph_with_runtime_summaries(graph)
+    graph = _rebuild_runtime_maps(graph)
+    return graph
 
 
 def _apply_runtime_graph(graph: Dict[str, Any], built_seconds: float) -> Dict[str, Any]:
@@ -249,6 +273,259 @@ def _build_sibling_map(parent_to_children: Dict[str, List[str]]) -> Dict[str, Li
         for child in children:
             sibling_map[child] = [x for x in children if x != child]
     return sibling_map
+
+
+def _graph_has_summary_nodes(graph: Dict[str, Any], *, doc_id: Optional[str] = None) -> bool:
+    for node in graph.get("nodes", []) or []:
+        md = node.get("metadata", {}) or {}
+        if md.get("artifact_type") != "summary":
+            continue
+        if doc_id is None or str(md.get("doc_id") or "") == str(doc_id):
+            return True
+    return False
+
+
+def _candidate_doc_summary(doc_id: str, graph: Dict[str, Any], doc_meta: Dict[str, Any]) -> str:
+    for node in graph.get("nodes", []) or []:
+        md = node.get("metadata", {}) or {}
+        if str(md.get("doc_id") or "") != doc_id:
+            continue
+        text = _norm_space(str(md.get("doc_summary") or ""))
+        if text:
+            return text
+    parts = [
+        str(doc_meta.get("doc_type") or doc_meta.get("law_type") or "").strip(),
+        str(doc_meta.get("official_title") or doc_meta.get("law_name") or "").strip(),
+    ]
+    fallback = " ".join(part for part in parts if part)
+    return _norm_space(fallback)
+
+
+def _summary_text_from_evidence(node: Dict[str, Any]) -> str:
+    return _norm_space(
+        str(node.get("retrieval_text") or node.get("rerank_text") or node.get("text") or "")
+    )
+
+
+def _augment_graph_with_runtime_summaries(graph: Dict[str, Any]) -> Dict[str, Any]:
+    existing_nodes = list(graph.get("nodes", []))
+    existing_edges = list(graph.get("edges", []))
+    doc_index = dict(graph.get("doc_index", {}))
+
+    evidence_by_doc: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for node in existing_nodes:
+        md = node.get("metadata", {}) or {}
+        if md.get("artifact_type") == "summary":
+            continue
+        doc_id = str(md.get("doc_id") or "").strip()
+        if doc_id:
+            evidence_by_doc[doc_id].append(node)
+
+    new_nodes: List[Dict[str, Any]] = []
+    new_edges: List[Dict[str, Any]] = []
+
+    for doc_id, evidence_nodes in evidence_by_doc.items():
+        if _graph_has_summary_nodes(graph, doc_id=doc_id):
+            continue
+
+        doc_meta = dict(doc_index.get(doc_id) or {})
+        evidence_ids = {str(n.get("node_id")) for n in evidence_nodes if n.get("node_id")}
+        summary_id_map: Dict[str, str] = {}
+
+        for node in evidence_nodes:
+            node_id = str(node.get("node_id") or "").strip()
+            if not node_id:
+                continue
+            summary_id_map[node_id] = f"{node_id}::summary"
+
+        root_summary_ids: List[str] = []
+        for node in evidence_nodes:
+            node_id = str(node.get("node_id") or "").strip()
+            if not node_id:
+                continue
+            md = dict(node.get("metadata") or {})
+            summary_id = summary_id_map[node_id]
+            parent_id = str(md.get("parent_id") or "").strip()
+            child_ids = [
+                summary_id_map[str(cid)]
+                for cid in (md.get("children_ids") or [])
+                if str(cid) in summary_id_map
+            ]
+            if not parent_id or parent_id not in evidence_ids:
+                root_summary_ids.append(summary_id)
+
+            summary_md = {
+                **md,
+                "doc_id": doc_id,
+                "artifact_type": "summary",
+                "summary_level": str(node.get("node_type") or md.get("node_type") or "text").strip().lower() or "text",
+                "source_node_ids": [node_id],
+                "child_summary_ids": child_ids,
+                "title": md.get("path_title") or md.get("title") or md.get("article") or md.get("clause") or md.get("point") or md.get("section") or md.get("subsection") or node_id,
+                "law_name": md.get("law_name") or md.get("official_title") or doc_meta.get("official_title") or doc_meta.get("law_name") or "",
+                "law_type": md.get("law_type") or md.get("doc_type") or doc_meta.get("doc_type") or doc_meta.get("law_type") or "Unknown",
+            }
+            new_nodes.append(
+                {
+                    "node_id": summary_id,
+                    "node_type": "summary",
+                    "text": _summary_text_from_evidence(node),
+                    "retrieval_text": _summary_text_from_evidence(node),
+                    "rerank_text": _summary_text_from_evidence(node),
+                    "metadata": summary_md,
+                }
+            )
+            new_edges.append(
+                {
+                    "source_id": summary_id,
+                    "target_id": node_id,
+                    "relation_type": SUMMARIZES_EDGE,
+                }
+            )
+            if parent_id and parent_id in summary_id_map:
+                new_edges.append(
+                    {
+                        "source_id": summary_id_map[parent_id],
+                        "target_id": summary_id,
+                        "relation_type": SUMMARY_EDGE,
+                    }
+                )
+
+        doc_summary_text = _candidate_doc_summary(doc_id, graph, doc_meta)
+        if doc_summary_text:
+            doc_summary_id = f"{doc_id}::summary::document"
+            doc_title = _norm_space(
+                str(doc_meta.get("official_title") or doc_meta.get("law_name") or doc_meta.get("file_name") or doc_id)
+            )
+            doc_summary_md = {
+                **doc_meta,
+                "doc_id": doc_id,
+                "artifact_type": "summary",
+                "summary_level": "document",
+                "title": doc_title or doc_id,
+                "document_title": doc_title or doc_id,
+                "law_name": doc_meta.get("official_title") or doc_meta.get("law_name") or doc_title or doc_id,
+                "law_type": doc_meta.get("doc_type") or doc_meta.get("law_type") or "Unknown",
+                "child_summary_ids": sorted(set(root_summary_ids)),
+                "source_node_ids": [],
+            }
+            new_nodes.append(
+                {
+                    "node_id": doc_summary_id,
+                    "node_type": "summary",
+                    "text": doc_summary_text,
+                    "retrieval_text": doc_summary_text,
+                    "rerank_text": doc_summary_text,
+                    "metadata": doc_summary_md,
+                }
+            )
+            for child_summary_id in sorted(set(root_summary_ids)):
+                new_edges.append(
+                    {
+                        "source_id": doc_summary_id,
+                        "target_id": child_summary_id,
+                        "relation_type": SUMMARY_EDGE,
+                    }
+                )
+            doc_index.setdefault(doc_id, {})["doc_summary_node_id"] = doc_summary_id
+
+    if not new_nodes and not new_edges:
+        return _rebuild_runtime_maps(graph)
+
+    graph["nodes"] = _dedup_nodes(existing_nodes + new_nodes)
+    graph["edges"] = _dedup_edges(existing_edges + new_edges)
+    graph["doc_index"] = doc_index
+    return _rebuild_runtime_maps(graph)
+
+
+def warmup_runtime_services(force: bool = False) -> Dict[str, Any]:
+    if _RUNTIME.get("services_warmed_up") and not force:
+        return {
+            "services_warmed_up": True,
+            "seconds": _RUNTIME.get("last_services_warmup_seconds"),
+            "error": _RUNTIME.get("warmup_last_error"),
+        }
+
+    with _RUNTIME_LOCK:
+        if _RUNTIME.get("services_warmed_up") and not force:
+            return {
+                "services_warmed_up": True,
+                "seconds": _RUNTIME.get("last_services_warmup_seconds"),
+                "error": _RUNTIME.get("warmup_last_error"),
+            }
+
+        start = time.perf_counter()
+        _RUNTIME["services_warmup_in_progress"] = True
+        error_messages: List[str] = []
+        warmed = {"llm": False, "embeddings": False, "cross_encoder": False}
+
+        try:
+            get_llm()
+            warmed["llm"] = True
+        except Exception as exc:
+            logger.warning("LLM warmup failed: %s", exc)
+            error_messages.append(f"llm: {exc}")
+
+        try:
+            get_embedings()
+            warmed["embeddings"] = True
+        except Exception as exc:
+            logger.warning("Embeddings warmup failed: %s", exc)
+            error_messages.append(f"embeddings: {exc}")
+
+        if get_cross_encoder is not None:
+            try:
+                get_cross_encoder()
+                warmed["cross_encoder"] = True
+            except Exception as exc:
+                logger.warning("Cross-encoder warmup failed: %s", exc)
+                error_messages.append(f"cross_encoder: {exc}")
+
+        seconds = time.perf_counter() - start
+        _RUNTIME["last_services_warmup_seconds"] = seconds
+        _RUNTIME["services_warmed_up"] = any(warmed.values()) and not error_messages
+        _RUNTIME["warmup_last_error"] = "; ".join(error_messages) if error_messages else None
+        _RUNTIME["services_warmup_in_progress"] = False
+        return {
+            "services_warmed_up": _RUNTIME["services_warmed_up"],
+            "seconds": seconds,
+            "details": warmed,
+            "error": _RUNTIME["warmup_last_error"],
+        }
+
+
+def preload_runtime_on_startup(
+    *,
+    preload_graph_snapshot: bool = True,
+    build_graph_if_missing: bool = False,
+    warm_services: bool = True,
+) -> Dict[str, Any]:
+    start = time.perf_counter()
+    graph_loaded = False
+    built_graph = False
+    warmup_info: Optional[Dict[str, Any]] = None
+
+    if warm_services:
+        warmup_info = warmup_runtime_services()
+
+    if preload_graph_snapshot:
+        graph_loaded = preload_runtime_graph_from_snapshot()
+
+    if not graph_loaded and build_graph_if_missing:
+        build_runtime_graph()
+        graph_loaded = True
+        built_graph = True
+
+    seconds = time.perf_counter() - start
+    _RUNTIME["startup_preload_completed"] = True
+    _RUNTIME["startup_preload_at"] = time.time()
+    _RUNTIME["last_startup_preload_seconds"] = seconds
+    return {
+        "graph_loaded": graph_loaded,
+        "graph_built": built_graph,
+        "warmup": warmup_info,
+        "seconds": seconds,
+    }
 
 
 def build_runtime_graph(
@@ -323,21 +600,18 @@ def build_runtime_graph(
                 for key, val in doc_index[doc_id].items():
                     if md.get(key) in (None, "") and val not in (None, ""):
                         md[key] = val
-        alias_index = _build_alias_index(nodes)
         graph = {
             "nodes": nodes,
             "edges": edges,
-            "node_index": node_index,
-            "alias_index": alias_index,
             "doc_index": doc_index,
-            "adjacency": _build_adjacency(edges),
-            "reverse_adjacency": _build_reverse_adjacency(edges),
         }
+        graph = _augment_graph_with_runtime_summaries(graph)
+        graph = _rebuild_runtime_maps(graph)
         _apply_runtime_graph(graph, built_seconds=time.perf_counter() - start)
         _save_graph_snapshot(graph)
         logger.info(
             "Graph build finished: docs=%s nodes=%s edges=%s aliases=%s took=%.2fs",
-            len(doc_index), len(nodes), len(edges), len(alias_index), _RUNTIME["last_graph_build_seconds"]
+            len(doc_index), len(graph.get("nodes", [])), len(graph.get("edges", [])), len(graph.get("alias_index", {})), _RUNTIME["last_graph_build_seconds"]
         )
         return graph
     finally:
@@ -354,6 +628,12 @@ def ensure_runtime_graph() -> Dict[str, Any]:
 
 def get_runtime_status() -> Dict[str, Any]:
     graph = _RUNTIME["graph"]
+    summary_count = 0
+    if graph is not None:
+        for node in graph.get("nodes", []) or []:
+            md = node.get("metadata", {}) or {}
+            if md.get("artifact_type") == "summary":
+                summary_count += 1
     return {
         "graph_loaded": graph is not None,
         "graph_loaded_at": _RUNTIME["graph_loaded_at"],
@@ -361,11 +641,19 @@ def get_runtime_status() -> Dict[str, Any]:
         "graph_node_count": len((graph or {}).get("nodes", [])),
         "graph_edge_count": len((graph or {}).get("edges", [])),
         "graph_alias_count": len((graph or {}).get("alias_index", {})),
+        "graph_summary_count": summary_count,
         "last_graph_build_seconds": _RUNTIME["last_graph_build_seconds"],
         "last_reindex_seconds": _RUNTIME["last_reindex_seconds"],
         "graph_build_in_progress": _RUNTIME["graph_build_in_progress"],
         "graph_snapshot_path": str(_snapshot_path()),
         "graph_snapshot_exists": _snapshot_path().exists(),
+        "services_warmed_up": _RUNTIME["services_warmed_up"],
+        "services_warmup_in_progress": _RUNTIME["services_warmup_in_progress"],
+        "last_services_warmup_seconds": _RUNTIME["last_services_warmup_seconds"],
+        "startup_preload_completed": _RUNTIME["startup_preload_completed"],
+        "startup_preload_at": _RUNTIME["startup_preload_at"],
+        "last_startup_preload_seconds": _RUNTIME["last_startup_preload_seconds"],
+        "warmup_last_error": _RUNTIME["warmup_last_error"],
     }
 
 
@@ -382,6 +670,7 @@ def save_current_runtime_graph_snapshot(force_build: bool = False) -> Dict[str, 
         "graph_nodes": len(graph.get("nodes", [])),
         "graph_edges": len(graph.get("edges", [])),
         "graph_aliases": len(graph.get("alias_index", {})),
+        "graph_summaries": sum(1 for n in graph.get("nodes", []) if (n.get("metadata", {}) or {}).get("artifact_type") == "summary"),
     }
 
 

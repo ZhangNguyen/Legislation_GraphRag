@@ -31,7 +31,7 @@ def _doc_key(metadata: Dict[str, Any]) -> str:
 
 def _group_for_context(passages: List[Dict[str, Any]], max_items: int) -> List[Dict[str, Any]]:
     grouped: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
-    for p in passages:
+    for p in passages[:max_items]:
         md = dict(p.get("metadata") or {})
         key = _doc_key(md)
         bucket = grouped.setdefault(
@@ -50,19 +50,22 @@ def _group_for_context(passages: List[Dict[str, Any]], max_items: int) -> List[D
 
     docs = list(grouped.values())
     docs.sort(key=lambda x: float(x.get("doc_best_score", 0.0)), reverse=True)
+    return docs
 
-    chosen: List[Dict[str, Any]] = []
-    remaining = max_items
-    for idx, doc in enumerate(docs):
-        items = sorted(doc["items"], key=lambda x: float(x.get("final_score", 0.0) or 0.0), reverse=True)
-        take_n = 2 if idx == 0 else 1
-        picked = items[: min(take_n, remaining)]
-        if picked:
-            chosen.append({**doc, "items": picked})
-            remaining -= len(picked)
-        if remaining <= 0:
-            break
-    return chosen
+
+def _dedup_blocks(texts: List[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for text in texts:
+        block = _norm_space(text)
+        if not block:
+            continue
+        key = block.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(block)
+    return out
 
 
 def _build_context(passages: List[Dict[str, Any]], max_items: int) -> str:
@@ -70,18 +73,27 @@ def _build_context(passages: List[Dict[str, Any]], max_items: int) -> str:
     lines: List[str] = []
     for idx, group in enumerate(groups, start=1):
         lines.append(f"[Nguồn {idx}] {group['doc_type']} | {group['doc_title']} | source={group['source']}")
+
+        shared_blocks = _dedup_blocks([str(item.get("shared_text") or "") for item in group["items"]])
+        if shared_blocks:
+            lines.append("[Ngữ cảnh chung của văn bản]")
+            for block in shared_blocks:
+                lines.append(block)
+
         for j, item in enumerate(group["items"], start=1):
             md = dict(item.get("metadata") or {})
             lines.append(
-                f"  - [Bundle {idx}.{j}] path={md.get('path_title') or '-'} | article={md.get('article') or '-'} | clause={md.get('clause') or '-'} | point={md.get('point') or '-'}"
+                f"  - [Passage {idx}.{j}] path={md.get('path_title') or '-'} | article={md.get('article') or '-'} | clause={md.get('clause') or '-'} | point={md.get('point') or '-'}"
             )
-            lines.append(f"    {item.get('bundle_text') or item.get('retrieval_text') or item.get('text')}")
+            local_text = str(item.get("local_text") or item.get("bundle_text") or item.get("retrieval_text") or item.get("text") or "")
+            lines.append(f"    {local_text}")
         lines.append("")
     return "\n".join(lines).strip()
 
 
 def _to_source_item(p: Dict[str, Any]) -> SourceItem:
     md = dict(p.get("metadata") or {})
+    snippet = str(p.get("local_text") or p.get("bundle_text") or p.get("retrieval_text") or p.get("text") or p.get("snippet") or "")[:500]
     return SourceItem(
         chunk_id=str(md.get("chunk_id") or md.get("node_id") or p.get("node_id") or ""),
         law_name=str(md.get("official_title") or md.get("law_name") or ""),
@@ -89,7 +101,7 @@ def _to_source_item(p: Dict[str, Any]) -> SourceItem:
         year=int(md.get("year") or 0),
         source=str(md.get("source") or md.get("issuing_agency") or ""),
         article=md.get("article"),
-        snippet=str(p.get("text") or p.get("snippet") or "")[:500],
+        snippet=snippet,
     )
 
 
