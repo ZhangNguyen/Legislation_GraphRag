@@ -121,6 +121,54 @@ def _same_article_focus(passages: List[Dict[str, Any]]) -> bool:
     return len(articles) == 1 and bool(articles)
 
 
+def _extract_doc_numbers(text: str) -> List[str]:
+    import re
+    seen = set()
+    out: List[str] = []
+    for m in re.finditer(r"\b\d{1,4}/\d{4}/[A-ZĐ\-]+\b", str(text or "").upper()):
+        value = _norm_space(m.group(0)).upper()
+        if value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def _build_no_passage_fallback(question: str, retrieval_result: Dict[str, Any], query_profile: Dict[str, Any]) -> str:
+    route = str(query_profile.get("route") or "factoid")
+    filters = retrieval_result.get("filters") or query_profile.get("filters") or {}
+    seed_candidates = retrieval_result.get("seed_candidates") or []
+    doc_seed_stage = str((query_profile.get("document_seed_stage") or "none")).strip()
+
+    if route == "version_change" and seed_candidates:
+        source_doc = str(filters.get("doc_number") or "").upper().strip()
+        top = dict(seed_candidates[0] or {})
+        text = "\n".join(
+            str(top.get(k) or "") for k in ["title_block", "lead_block", "doc_sketch", "text", "law_name"]
+        )
+        candidates = [x for x in _extract_doc_numbers(text) if x and x != source_doc]
+        if candidates:
+            joined = ", ".join(candidates[:3])
+            return (
+                f"Tạm thời chưa trích được passage xác nhận, nhưng từ văn bản nguồn đã nhận diện được, văn bản bị tác động nhiều khả năng là {joined}. "
+                f"Hệ thống đang dừng ở tầng retrieval nên nên kiểm tra lại pipeline document_seed[{doc_seed_stage}] và passage extraction."
+            )
+
+    if filters.get("doc_number") or filters.get("law_type"):
+        bits = []
+        if filters.get("law_type"):
+            bits.append(str(filters.get("law_type")))
+        if filters.get("doc_number"):
+            bits.append(str(filters.get("doc_number")))
+        target = " ".join(bits).strip()
+        return (
+            f"Hệ thống đã nhận diện truy vấn nhắm tới {target or 'một văn bản cụ thể'}, nhưng chưa lấy ra được passage phù hợp từ retrieval. "
+            f"Tầng document seed hiện tại: {doc_seed_stage}."
+        )
+
+    return "Chưa tìm thấy ngữ cảnh phù hợp để trả lời câu hỏi này trong dữ liệu hiện có."
+
+
 def build_chat_response(
     question: str,
     passages: List[Dict[str, Any]],
@@ -129,12 +177,14 @@ def build_chat_response(
     max_source_items: int | None = None,
     response_mode: str | None = None,
     query_profile: Dict[str, Any] | None = None,
+    retrieval_result: Dict[str, Any] | None = None,
 ) -> ChatResponse:
     _ = response_mode
-    if not passages:
-        return ChatResponse(answer="Chưa tìm thấy ngữ cảnh phù hợp để trả lời câu hỏi này trong dữ liệu hiện có.", sources=[])
-
     query_profile = query_profile or {}
+    if not passages:
+        answer = _build_no_passage_fallback(question, retrieval_result or {}, query_profile)
+        return ChatResponse(answer=answer, sources=[])
+
     route = str(query_profile.get("route") or "factoid")
     max_context_passages = max_context_passages or settings.answer_max_context_passages
     max_source_items = max_source_items or settings.answer_max_source_items
@@ -195,4 +245,5 @@ def answer_with_rag(question: str, retrieval_result: Dict[str, Any], *, response
         max_source_items=retrieval_result.get("final_top_k"),
         response_mode=response_mode or retrieval_result.get("mode"),
         query_profile=retrieval_result.get("query_profile") or {},
+        retrieval_result=retrieval_result,
     )

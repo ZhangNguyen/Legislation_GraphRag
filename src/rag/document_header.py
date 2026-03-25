@@ -32,7 +32,8 @@ AGENCY_SKIP = (
     "Độc lập - Tự do - Hạnh phúc",
 )
 
-NUMBER_RE = re.compile(r"^Số\s*:\s*(.+)$", re.IGNORECASE)
+NUMBER_RE = re.compile(r"^Số\s*:?\s*(.+)$", re.IGNORECASE)
+DOC_NUMBER_IN_TEXT_RE = re.compile(r"\b\d{1,4}/\d{4}/[A-ZĐ\-]+\b", re.IGNORECASE)
 DATE_RE = re.compile(
     r"(?:^|,\s*)(?P<place>[A-ZÀ-Ỵa-zà-ỵ\s\.\-]+),\s*ngày\s*(?P<day>\d{1,2})\s*tháng\s*(?P<month>\d{1,2})\s*năm\s*(?P<year>\d{4})",
     re.IGNORECASE,
@@ -63,6 +64,16 @@ def _clean_lines(text: str) -> List[str]:
     return out
 
 
+def _clean_doc_number(text: str) -> Optional[str]:
+    raw = _norm_space(str(text or ""))
+    if not raw:
+        return None
+    m = DOC_NUMBER_IN_TEXT_RE.search(raw.upper())
+    if not m:
+        return None
+    return _norm_space(m.group(0)).upper()
+
+
 def _is_upper_like(line: str) -> bool:
     letters = [ch for ch in line if ch.isalpha()]
     if len(letters) < 4:
@@ -81,15 +92,22 @@ def _pick_issuing_agency(lines: List[str]) -> Optional[str]:
 
 
 def _pick_doc_number(lines: List[str]) -> Optional[str]:
-    for line in lines[:20]:
+    for line in lines[:25]:
         m = NUMBER_RE.match(line)
         if m:
+            cleaned = _clean_doc_number(m.group(1))
+            if cleaned:
+                return cleaned
             return _norm_space(m.group(1))
+    for line in lines[:25]:
+        cleaned = _clean_doc_number(line)
+        if cleaned:
+            return cleaned
     return None
 
 
 def _pick_date(lines: List[str]) -> tuple[Optional[str], Optional[int]]:
-    for line in lines[:20]:
+    for line in lines[:25]:
         m = DATE_RE.search(line)
         if m:
             day = int(m.group("day"))
@@ -208,6 +226,11 @@ def extract_document_header(text: str, *, fallback_name: str = "") -> DocumentHe
             body_start_index = min(len(lines), body_start_index + len(lead_lines))
 
     lead_block = "\n".join(lead_lines[:6]).strip()
+
+    if year is None and doc_number:
+        m_year = re.search(r"/(\d{4})/", str(doc_number))
+        if m_year:
+            year = int(m_year.group(1))
 
     doc_id_seed = doc_number or official_title or file_stem
     doc_id = _slugify(doc_id_seed)

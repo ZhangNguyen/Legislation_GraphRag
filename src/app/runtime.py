@@ -50,6 +50,8 @@ _RUNTIME_LOCK = Lock()
 SUMMARY_EDGE = "HAS_CHILD_SUMMARY"
 SUMMARIZES_EDGE = "SUMMARIZES"
 
+DOC_NUMBER_IN_TEXT_RE = re.compile(r"\b\d{1,4}/\d{4}/[A-ZĐ\-]+\b", re.IGNORECASE)
+
 
 def _norm_space(text: str) -> str:
     return " ".join((text or "").split()).strip()
@@ -60,6 +62,38 @@ def _slugify(text: str) -> str:
     raw = re.sub(r"[^a-z0-9à-ỹ]+", "_", raw)
     raw = re.sub(r"_+", "_", raw).strip("_")
     return raw or "doc"
+
+
+def _extract_doc_number(text: str) -> str:
+    raw = _norm_space(str(text or ""))
+    if not raw:
+        return ""
+    m = DOC_NUMBER_IN_TEXT_RE.search(raw.upper())
+    return _norm_space(m.group(0)).upper() if m else ""
+
+
+def _infer_year_from_doc_number(text: str) -> int:
+    m = re.search(r"/(\d{4})/", str(text or ""))
+    return int(m.group(1)) if m else 0
+
+
+def _normalize_doc_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
+    md = dict(meta or {})
+    doc_number = _extract_doc_number(md.get("doc_number") or md.get("title_block") or md.get("lead_block") or "")
+    if doc_number:
+        md["doc_number"] = doc_number
+    year = int(md.get("year") or 0)
+    if not year and md.get("doc_number"):
+        md["year"] = _infer_year_from_doc_number(md.get("doc_number"))
+    if md.get("doc_type") and not md.get("law_type"):
+        md["law_type"] = md.get("doc_type")
+    if md.get("law_type") and not md.get("doc_type"):
+        md["doc_type"] = md.get("law_type")
+    if md.get("official_title") and not md.get("law_name"):
+        md["law_name"] = md.get("official_title")
+    if md.get("law_name") and not md.get("official_title"):
+        md["official_title"] = md.get("law_name")
+    return md
 
 
 def _build_adjacency(edges: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
@@ -184,7 +218,8 @@ def _load_graph_snapshot() -> Optional[Dict[str, Any]]:
     doc_index = dict(raw.get("doc_index", {}))
     parent_to_children: Dict[str, List[str]] = defaultdict(list)
     for n in nodes:
-        md = dict(n.get("metadata") or {})
+        md = _normalize_doc_meta(dict(n.get("metadata") or {}))
+        n["metadata"] = md
         parent_id = md.get("parent_id")
         if parent_id:
             parent_to_children[str(parent_id)].append(str(n.get("node_id")))
@@ -207,7 +242,8 @@ def _load_graph_snapshot() -> Optional[Dict[str, Any]]:
         for child in children:
             sibling_map[child] = [x for x in children if x != child]
     for n in nodes:
-        md = n.setdefault("metadata", {})
+        md = _normalize_doc_meta(n.setdefault("metadata", {}))
+        n["metadata"] = md
         node_id = str(n.get("node_id") or "")
         md["children_ids"] = parent_to_children.get(node_id, md.get("children_ids", []))
         md["sibling_ids"] = sibling_map.get(node_id, md.get("sibling_ids", []))
@@ -565,7 +601,7 @@ def build_runtime_graph(
             text = load_document(fp)
             header = extract_document_header(text, fallback_name=fp.stem)
             doc_prefix = _slugify(fp.stem)
-            doc_meta = header.to_metadata()
+            doc_meta = _normalize_doc_meta(header.to_metadata())
             doc_meta["doc_id"] = doc_prefix
             doc_meta["file_name"] = fp.name
             doc_meta["source_path"] = str(fp)
@@ -575,7 +611,7 @@ def build_runtime_graph(
             chunks = _prefix_chunks(chunks, doc_prefix, doc_meta=doc_meta)
 
             for ch in chunks:
-                md = dict(ch.get("metadata") or {})
+                md = _normalize_doc_meta(dict(ch.get("metadata") or {}))
                 node_id = str(md.get("node_id") or md.get("chunk_id") or "")
                 if not node_id:
                     continue
@@ -715,7 +751,7 @@ def reindex_qdrant_from_normalized(
         header = extract_document_header(text, fallback_name=fp.stem)
         doc_title = fp.stem
         doc_prefix = _slugify(doc_title)
-        doc_meta = header.to_metadata()
+        doc_meta = _normalize_doc_meta(header.to_metadata())
         doc_meta["doc_id"] = doc_prefix
 
         chunks = legal_chunk(text, max_chars=max_chars, overlap=overlap, fallback_doc_name=fp.stem)

@@ -214,10 +214,14 @@ def _build_doc_catalog(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "doc_key": doc_key,
                 "doc_id": md.get("doc_id") or doc_key,
                 "law_name": md.get("official_title") or md.get("law_name") or doc_key,
+                "official_title": md.get("official_title") or md.get("law_name") or doc_key,
                 "law_type": md.get("doc_type") or md.get("law_type") or "Unknown",
+                "doc_type": md.get("doc_type") or md.get("law_type") or "Unknown",
                 "source": md.get("source") or md.get("issuing_agency") or "LocalFile",
                 "year": int(md.get("year") or 0),
                 "doc_number": md.get("doc_number") or "",
+                "title_block": md.get("title_block") or "",
+                "lead_block": md.get("lead_block") or "",
                 "doc_sketch": "",
                 "doc_sketch_node_id": None,
                 "doc_sketch_source_node_ids": [],
@@ -230,6 +234,24 @@ def _build_doc_catalog(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
             },
         )
         bucket["member_node_ids"].add(node_id)
+        if not bucket.get("doc_number") and md.get("doc_number"):
+            bucket["doc_number"] = md.get("doc_number")
+        if not bucket.get("law_name") and (md.get("official_title") or md.get("law_name")):
+            bucket["law_name"] = md.get("official_title") or md.get("law_name")
+        if not bucket.get("official_title") and (md.get("official_title") or md.get("law_name")):
+            bucket["official_title"] = md.get("official_title") or md.get("law_name")
+        if bucket.get("law_type") in (None, "", "Unknown") and (md.get("doc_type") or md.get("law_type")):
+            bucket["law_type"] = md.get("doc_type") or md.get("law_type")
+        if bucket.get("doc_type") in (None, "", "Unknown") and (md.get("doc_type") or md.get("law_type")):
+            bucket["doc_type"] = md.get("doc_type") or md.get("law_type")
+        if not bucket.get("title_block") and md.get("title_block"):
+            bucket["title_block"] = md.get("title_block")
+        if not bucket.get("lead_block") and md.get("lead_block"):
+            bucket["lead_block"] = md.get("lead_block")
+        if not bucket.get("source") and (md.get("source") or md.get("issuing_agency")):
+            bucket["source"] = md.get("source") or md.get("issuing_agency")
+        if not bucket.get("year") and md.get("year"):
+            bucket["year"] = int(md.get("year") or 0)
 
         artifact = _artifact_type(node)
         if artifact == "doc_sketch":
@@ -282,36 +304,289 @@ def _build_doc_catalog(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def _matches_filters(doc_or_md: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+DOC_NUMBER_ANY_RE = re.compile(r"\b0*(\d{1,4})\s*/\s*(\d{4})\s*/\s*([A-ZĐ\-][A-ZĐ\-\s]*)\b", re.IGNORECASE)
+
+
+def _extract_doc_number(text: str) -> str:
+    s = _norm_space(str(text or ""))
+    if not s:
+        return ""
+    m = DOC_NUMBER_ANY_RE.search(s.upper())
+    if not m:
+        return ""
+    first = str(int(m.group(1)))
+    year = m.group(2)
+    tail = re.sub(r"\s+", "", m.group(3).upper())
+    return f"{first}/{year}/{tail}"
+
+
+def _normalize_doc_number(text: str) -> str:
+    s = _norm_space(str(text or "")).upper()
+    if not s:
+        return ""
+    extracted = _extract_doc_number(s)
+    if extracted:
+        return extracted
+    return re.sub(r"\s+", "", s)
+
+
+def _normalize_law_type(text: str) -> str:
+    raw = _norm_space(str(text or "")).lower()
+    if not raw:
+        return ""
+    aliases = {
+        "thông tư": "thông tư",
+        "thong tu": "thông tư",
+        "tt": "thông tư",
+        "nghị định": "nghị định",
+        "nghi dinh": "nghị định",
+        "nd": "nghị định",
+        "quyết định": "quyết định",
+        "quyet dinh": "quyết định",
+        "qd": "quyết định",
+        "luật": "luật",
+        "bo luat": "bộ luật",
+        "bộ luật": "bộ luật",
+        "nghị quyết": "nghị quyết",
+        "nghi quyet": "nghị quyết",
+    }
+    return aliases.get(raw, raw)
+
+
+def _infer_year_from_doc_number(text: str) -> int:
+    norm = _normalize_doc_number(text) or _extract_doc_number(text)
+    m = re.search(r"/(\d{4})/", norm)
+    return int(m.group(1)) if m else 0
+
+
+def _doc_filter_text(doc_or_md: Dict[str, Any]) -> str:
+    parts = [
+        str(doc_or_md.get("doc_number") or ""),
+        str(doc_or_md.get("law_name") or ""),
+        str(doc_or_md.get("official_title") or ""),
+        str(doc_or_md.get("doc_sketch") or ""),
+        str(doc_or_md.get("title_block") or ""),
+        str(doc_or_md.get("lead_block") or ""),
+        str(doc_or_md.get("law_type") or doc_or_md.get("doc_type") or ""),
+    ]
+    return _norm_space("\n".join(x for x in parts if _norm_space(x))).lower()
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"\s+", "", str(text or "")).upper()
+
+
+def _matches_filters(doc_or_md: Dict[str, Any], filters: Dict[str, Any], *, relaxed: bool = False) -> bool:
     if not filters:
         return True
-    for key in ["law_type", "doc_number"]:
-        want = _norm_space(str(filters.get(key) or ""))
-        if not want:
-            continue
-        have = _norm_space(str(doc_or_md.get(key) or doc_or_md.get(key.lower()) or ""))
-        if want.lower() != have.lower():
+
+    haystack = _doc_filter_text(doc_or_md)
+    haystack_compact = _compact(haystack)
+
+    want_doc_number = _normalize_doc_number(filters.get("doc_number") or "")
+    if want_doc_number:
+        have_doc_number = _normalize_doc_number(doc_or_md.get("doc_number") or doc_or_md.get("doc_number".lower()) or "")
+        if not have_doc_number:
+            have_doc_number = _extract_doc_number(haystack)
+        if have_doc_number:
+            if relaxed:
+                if want_doc_number != have_doc_number and want_doc_number not in have_doc_number and have_doc_number not in want_doc_number:
+                    return False
+            elif want_doc_number != have_doc_number:
+                return False
+        elif want_doc_number not in haystack_compact:
             return False
+
+    want_law_type = _normalize_law_type(filters.get("law_type") or "")
+    if want_law_type:
+        have_law_type = _normalize_law_type(doc_or_md.get("law_type") or doc_or_md.get("law_type".lower()) or doc_or_md.get("doc_type") or "")
+        if have_law_type:
+            if not relaxed and want_law_type != have_law_type:
+                return False
+            if relaxed and want_law_type != have_law_type and want_law_type not in haystack:
+                return False
+        elif want_law_type not in haystack:
+            return False
+
     want_year = int(filters.get("year") or 0)
-    if want_year and int(doc_or_md.get("year") or 0) != want_year:
-        return False
+    if want_year:
+        have_year = int(doc_or_md.get("year") or 0)
+        if not have_year:
+            have_year = _infer_year_from_doc_number(doc_or_md.get("doc_number") or haystack)
+        if have_year and have_year != want_year:
+            return False
+
     return True
 
-
-# =========================
-# Ranking helpers
-# =========================
 
 def _doc_boost(doc: Dict[str, Any], query_profile: Dict[str, Any]) -> float:
     boost = 0.0
     filters = query_profile.get("filters") or {}
-    doc_number = _norm_space(str(filters.get("doc_number") or ""))
-    if doc_number and doc_number.lower() == _norm_space(str(doc.get("doc_number") or "")).lower():
-        boost += 0.35
-    law_type = _norm_space(str(filters.get("law_type") or ""))
-    if law_type and law_type.lower() == _norm_space(str(doc.get("law_type") or "")).lower():
+    doc_number = _normalize_doc_number(filters.get("doc_number") or "")
+    have_doc_number = _normalize_doc_number(doc.get("doc_number") or "") or _extract_doc_number(_doc_filter_text(doc))
+    if doc_number and have_doc_number and doc_number == have_doc_number:
+        boost += 0.38
+    law_type = _normalize_law_type(filters.get("law_type") or "")
+    have_law_type = _normalize_law_type(doc.get("law_type") or doc.get("doc_type") or "")
+    if law_type and have_law_type and law_type == have_law_type:
         boost += 0.08
+    want_year = int(filters.get("year") or 0)
+    have_year = int(doc.get("year") or 0) or _infer_year_from_doc_number(doc.get("doc_number") or "")
+    if want_year and have_year and want_year == have_year:
+        boost += 0.04
     return boost
+
+
+def _filter_docs_relaxed(docs: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if not filters:
+        return docs
+    return [doc for doc in docs if _matches_filters(doc, filters, relaxed=True)]
+
+
+def _doc_rank_fields(doc: Dict[str, Any]) -> Dict[str, str]:
+    title = _norm_space(str(doc.get("official_title") or doc.get("law_name") or ""))
+    sketch = _norm_space(str(doc.get("doc_sketch") or ""))
+    doc_number = _norm_space(str(doc.get("doc_number") or ""))
+    title_block = _norm_space(str(doc.get("title_block") or ""))
+    lead_block = _first_sentences(str(doc.get("lead_block") or ""), max_sentences=3, max_chars=420)
+    header = _norm_space("\n".join(x for x in [title_block, lead_block] if x))
+    combined = _norm_space("\n".join(x for x in [doc_number, title, sketch, header] if x))
+    return {
+        "doc_number": doc_number,
+        "title": title,
+        "sketch": sketch,
+        "header": header,
+        "combined": combined,
+    }
+
+
+def _prefilter_docs_for_rescue(question: str, docs: List[Dict[str, Any]], filters: Dict[str, Any], *, limit: int = 64) -> List[Dict[str, Any]]:
+    if not docs:
+        return []
+    want_doc_number = _normalize_doc_number(filters.get("doc_number") or "")
+    want_law_type = _normalize_law_type(filters.get("law_type") or "")
+    want_year = int(filters.get("year") or 0)
+    scored: List[Tuple[float, Dict[str, Any]]] = []
+    for doc in docs:
+        fields = _doc_rank_fields(doc)
+        score = 0.0
+        combined = fields["combined"]
+        title = fields["title"]
+        sketch = fields["sketch"]
+        score += 1.25 * _bm25_value(question, title)
+        score += 1.00 * _bm25_value(question, sketch)
+        score += 0.75 * _bm25_value(question, combined)
+        have_doc_number = _normalize_doc_number(fields["doc_number"]) or _extract_doc_number(combined)
+        if want_doc_number and have_doc_number == want_doc_number:
+            score += 10.0
+        elif want_doc_number and want_doc_number and want_doc_number in _compact(combined):
+            score += 6.0
+        have_law_type = _normalize_law_type(doc.get("law_type") or doc.get("doc_type") or "")
+        if want_law_type and have_law_type == want_law_type:
+            score += 1.5
+        have_year = int(doc.get("year") or 0) or _infer_year_from_doc_number(fields["doc_number"])
+        if want_year and have_year == want_year:
+            score += 1.0
+        if score > 0:
+            scored.append((score, doc))
+    scored.sort(key=lambda x: (x[0], len(str(x[1].get("doc_sketch") or ""))), reverse=True)
+    return [doc for _, doc in scored[: max(1, int(limit or 1))]]
+
+
+def _rank_documents_multifield_rrf(
+    question: str,
+    docs: List[Dict[str, Any]],
+    *,
+    top_k: int,
+    question_vec: Optional[List[float]] = None,
+    query_profile: Optional[Dict[str, Any]] = None,
+    seed_stage: str = "strict",
+) -> List[Dict[str, Any]]:
+    if not docs:
+        return []
+
+    qv = question_vec or _question_embedding(question)
+    fields_by_id: Dict[str, Dict[str, str]] = {}
+    id_to_doc: Dict[str, Dict[str, Any]] = {}
+    title_texts: List[str] = []
+    sketch_texts: List[str] = []
+    combined_texts: List[str] = []
+    for doc in docs:
+        doc_id = str(doc.get("id") or "")
+        fields = _doc_rank_fields(doc)
+        fields_by_id[doc_id] = fields
+        id_to_doc[doc_id] = doc
+        title_texts.append(fields["title"] or fields["combined"])
+        sketch_texts.append(fields["sketch"] or fields["combined"])
+        combined_texts.append(fields["combined"] or fields["title"] or fields["sketch"])
+
+    title_embeds = _batch_embed_texts(title_texts, cache=_DOC_EMBED_CACHE)
+    sketch_embeds = _batch_embed_texts(sketch_texts, cache=_DOC_EMBED_CACHE)
+    combined_embeds = _batch_embed_texts(combined_texts, cache=_DOC_EMBED_CACHE)
+
+    rank_lists: List[List[str]] = []
+    scored_lists: List[Tuple[str, List[Dict[str, Any]]]] = []
+    bm25_docno_items: List[Dict[str, Any]] = []
+    bm25_title_items: List[Dict[str, Any]] = []
+    bm25_sketch_items: List[Dict[str, Any]] = []
+    bm25_header_items: List[Dict[str, Any]] = []
+    dense_title_items: List[Dict[str, Any]] = []
+    dense_sketch_items: List[Dict[str, Any]] = []
+    dense_combined_items: List[Dict[str, Any]] = []
+
+    for doc_id, doc in id_to_doc.items():
+        fields = fields_by_id[doc_id]
+        boost = _doc_boost(doc, query_profile or {})
+        docno_text = fields["doc_number"] or fields["combined"]
+        title_text = fields["title"] or fields["combined"]
+        sketch_text = fields["sketch"] or fields["combined"]
+        header_text = fields["header"] or fields["combined"]
+        combined_text = fields["combined"] or title_text or sketch_text or header_text
+
+        bm25_docno_items.append({"id": doc_id, "score": _bm25_value(question, docno_text) + 1.2 * boost})
+        bm25_title_items.append({"id": doc_id, "score": _bm25_value(question, title_text) + 0.8 * boost})
+        bm25_sketch_items.append({"id": doc_id, "score": _bm25_value(question, sketch_text) + 0.7 * boost})
+        bm25_header_items.append({"id": doc_id, "score": _bm25_value(question, header_text) + 0.5 * boost})
+
+        dense_title = _cosine(qv, title_embeds.get(_text_cache_key(title_text), []))
+        dense_sketch = _cosine(qv, sketch_embeds.get(_text_cache_key(sketch_text), []))
+        dense_combined = _cosine(qv, combined_embeds.get(_text_cache_key(combined_text), []))
+        dense_title_items.append({"id": doc_id, "score": dense_title + 0.9 * boost})
+        dense_sketch_items.append({"id": doc_id, "score": dense_sketch + 0.7 * boost})
+        dense_combined_items.append({"id": doc_id, "score": dense_combined + 1.0 * boost})
+
+    for items in [bm25_docno_items, bm25_title_items, bm25_sketch_items, bm25_header_items, dense_title_items, dense_sketch_items, dense_combined_items]:
+        rank_lists.append(_sorted_ids_by_score(items, "score"))
+
+    fused = _rrf_fuse(rank_lists)
+
+    ranked: List[Dict[str, Any]] = []
+    for doc_id, doc in id_to_doc.items():
+        fields = fields_by_id[doc_id]
+        title_text = fields["title"] or fields["combined"]
+        sketch_text = fields["sketch"] or fields["combined"]
+        combined_text = fields["combined"] or title_text or sketch_text
+        dense_title = _cosine(qv, title_embeds.get(_text_cache_key(title_text), []))
+        dense_sketch = _cosine(qv, sketch_embeds.get(_text_cache_key(sketch_text), []))
+        dense_combined = _cosine(qv, combined_embeds.get(_text_cache_key(combined_text), []))
+        bm25_docno = _bm25_value(question, fields["doc_number"] or combined_text)
+        bm25_title = _bm25_value(question, title_text)
+        bm25_sketch = _bm25_value(question, sketch_text)
+        bm25_header = _bm25_value(question, fields["header"] or combined_text)
+        boost = _doc_boost(doc, query_profile or {})
+        item = dict(doc)
+        item["text"] = combined_text
+        item["dense_score"] = float(max(dense_title, dense_sketch, dense_combined))
+        item["bm25_score"] = float(max(bm25_docno, bm25_title, bm25_sketch, bm25_header))
+        item["rrf_score"] = float(fused.get(doc_id, 0.0) + boost)
+        item["hybrid_score"] = item["rrf_score"]
+        item["doc_seed_stage"] = seed_stage
+        item["doc_rank_title"] = fields["title"]
+        item["doc_rank_header"] = fields["header"]
+        ranked.append(item)
+
+    ranked.sort(key=lambda x: (float(x.get("rrf_score", 0.0)), float(x.get("dense_score", 0.0)), float(x.get("bm25_score", 0.0))), reverse=True)
+    return ranked[: max(1, int(top_k or _DOCUMENT_TOP_K))]
 
 
 def rank_documents_by_sketch_rrf(
@@ -323,51 +598,28 @@ def rank_documents_by_sketch_rrf(
     filters: Optional[Dict[str, Any]] = None,
     query_profile: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    docs = [d for d in _build_doc_catalog(graph) if _matches_filters(d, filters or {})]
-    if not docs:
-        return []
+    all_docs = _build_doc_catalog(graph)
+    active_filters = filters or {}
 
-    qv = question_vec or _question_embedding(question)
-    sketch_texts = [str(doc.get("doc_sketch") or "") for doc in docs]
-    sketch_embeds = _batch_embed_texts(sketch_texts, cache=_DOC_EMBED_CACHE)
+    strict_docs = [d for d in all_docs if _matches_filters(d, active_filters, relaxed=False)]
+    if strict_docs:
+        return _rank_documents_multifield_rrf(
+            question, strict_docs, top_k=top_k, question_vec=question_vec, query_profile=query_profile, seed_stage="strict"
+        )
 
-    dense_items: List[Dict[str, Any]] = []
-    bm25_items: List[Dict[str, Any]] = []
-    id_to_doc: Dict[str, Dict[str, Any]] = {}
+    relaxed_docs = _filter_docs_relaxed(all_docs, active_filters) if active_filters else []
+    if relaxed_docs:
+        return _rank_documents_multifield_rrf(
+            question, relaxed_docs, top_k=top_k, question_vec=question_vec, query_profile=query_profile, seed_stage="relaxed"
+        )
 
-    for doc in docs:
-        doc_id = str(doc.get("id") or "")
-        sketch_text = str(doc.get("doc_sketch") or "")
-        embed = sketch_embeds.get(_text_cache_key(sketch_text), [])
-        dense_score = _cosine(qv, embed)
-        bm25_val = _bm25_value(question, sketch_text)
-        boost = _doc_boost(doc, query_profile or {})
-        dense_items.append({"id": doc_id, "dense_score": dense_score + boost})
-        bm25_items.append({"id": doc_id, "bm25_score": bm25_val + boost})
-        id_to_doc[doc_id] = doc
+    rescue_pool = _prefilter_docs_for_rescue(question, all_docs, active_filters, limit=max(32, 8 * max(1, int(top_k or _DOCUMENT_TOP_K))))
+    if rescue_pool:
+        return _rank_documents_multifield_rrf(
+            question, rescue_pool, top_k=top_k, question_vec=question_vec, query_profile=query_profile, seed_stage="rescue_rrf"
+        )
 
-    fused = _rrf_fuse([
-        _sorted_ids_by_score(dense_items, "dense_score"),
-        _sorted_ids_by_score(bm25_items, "bm25_score"),
-    ])
-
-    ranked: List[Dict[str, Any]] = []
-    for doc_id, doc in id_to_doc.items():
-        sketch_text = str(doc.get("doc_sketch") or "")
-        embed = sketch_embeds.get(_text_cache_key(sketch_text), [])
-        dense_score = _cosine(qv, embed)
-        bm25_val = _bm25_value(question, sketch_text)
-        boost = _doc_boost(doc, query_profile or {})
-        item = dict(doc)
-        item["text"] = sketch_text
-        item["dense_score"] = float(dense_score)
-        item["bm25_score"] = float(bm25_val)
-        item["rrf_score"] = float(fused.get(doc_id, 0.0) + boost)
-        item["hybrid_score"] = item["rrf_score"]
-        ranked.append(item)
-
-    ranked.sort(key=lambda x: (float(x.get("rrf_score", 0.0)), float(x.get("dense_score", 0.0))), reverse=True)
-    return ranked[: max(1, int(top_k or _DOCUMENT_TOP_K))]
+    return []
 
 
 def _field_dense_bm25(question: str, texts: List[str], question_vec: List[float]) -> Tuple[List[float], List[float]]:
@@ -764,6 +1016,7 @@ def retrieve_with_graph(
         filters=merged_filters,
         query_profile=query_profile,
     )
+    doc_seed_stage = str((doc_candidates[0].get("doc_seed_stage") if doc_candidates else "none") or "none")
 
     final_limit = max(1, int(final_top_k or _FINAL_TOP_K))
     cross_limit = max(1, int(cross_top_k or (_PASSAGES_PER_DOC * max(1, len(doc_candidates)))))
@@ -771,13 +1024,13 @@ def retrieve_with_graph(
     route = str(query_profile.get("route") or "factoid")
     if route == "heading_list":
         candidate_pool, final_passages = _heading_list_route(question, graph, doc_candidates, query_profile, question_vec, final_limit)
-        pipeline = "doc_sketch_rrf -> article_bundle_rank -> expand_same_article -> topk"
+        pipeline = f"document_seed[{doc_seed_stage}] -> article_bundle_rank -> expand_same_article -> topk"
     elif route == "version_change":
         candidate_pool, final_passages = _version_change_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
-        pipeline = "doc_sketch_rrf -> change_candidates -> multifield_hybrid -> cross_rerank -> topk"
+        pipeline = f"document_seed[{doc_seed_stage}] -> change_candidates -> multifield_hybrid -> cross_rerank -> topk"
     else:
         candidate_pool, final_passages = _generic_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
-        pipeline = "doc_sketch_rrf -> top_docs -> provision/article candidates -> multifield_hybrid -> cross_rerank -> completion -> topk"
+        pipeline = f"document_seed[{doc_seed_stage}] -> provision/article candidates -> multifield_hybrid -> cross_rerank -> completion -> topk"
 
     for idx, passage in enumerate(final_passages, start=1):
         passage["rank"] = idx
@@ -819,5 +1072,6 @@ def retrieve_with_graph(
             "uses_graph_summary_nodes": False,
             "intent_terms": query_profile.get("intent_terms") or [],
             "filters": merged_filters,
+            "document_seed_stage": doc_seed_stage,
         },
     }

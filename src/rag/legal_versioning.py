@@ -18,6 +18,10 @@ DATE_RE = re.compile(
     r"(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}\s+tháng\s+\d{1,2}\s+năm\s+\d{4})",
     re.IGNORECASE,
 )
+DOC_NUMBER_RE = re.compile(
+    r"\b(?:Luật|Bộ luật|Nghị định|Thông tư|Thông tư liên tịch|Quyết định|Nghị quyết|Chỉ thị|Công văn|Thông báo)?\s*\d{1,4}/\d{4}/[A-ZĐ\-]+\b",
+    re.IGNORECASE,
+)
 
 
 # =========================
@@ -61,6 +65,33 @@ def _extract_date_candidates(text: str) -> List[str]:
     if not text:
         return []
     return sorted(set(m.group(1) for m in DATE_RE.finditer(text)))
+
+
+def _extract_doc_numbers(text: str) -> List[str]:
+    if not text:
+        return []
+    vals = []
+    seen = set()
+    for m in DOC_NUMBER_RE.finditer(text):
+        val = _norm_space(m.group(0)).upper()
+        if val and val not in seen:
+            seen.add(val)
+            vals.append(val)
+    return vals
+
+
+def _guess_target_scope(*, target_article: Optional[str], target_clause: Optional[str], target_point: Optional[str], target_id: Optional[str], target_doc_numbers: List[str], target_text: str) -> str:
+    if target_point:
+        return "point"
+    if target_clause:
+        return "clause"
+    if target_article:
+        return "article"
+    if target_doc_numbers or _norm_space(target_text):
+        return "document"
+    if target_id:
+        return "node"
+    return "unknown"
 
 
 # =========================
@@ -155,23 +186,43 @@ def _build_version_event(graph: Dict[str, Any], edge: Dict[str, Any]) -> Optiona
     target_article = edge.get("target_article") or src_md.get("target_article")
     target_clause = edge.get("target_clause") or src_md.get("target_clause")
     target_point = edge.get("target_point") or src_md.get("target_point")
+    target_text = _norm_space(str(edge.get("target_text") or ""))
+    source_text = _norm_space(str(edge.get("source_text") or src_text or ""))
 
-    if not target_article and not edge.get("target_id"):
+    source_doc_number = _norm_space(str(src_md.get("doc_number") or "")).upper()
+    target_doc_numbers = _extract_doc_numbers(target_text)
+    if source_doc_number:
+        target_doc_numbers = [x for x in target_doc_numbers if x != source_doc_number]
+
+    has_structured_target = bool(target_article or target_clause or target_point or edge.get("target_id"))
+    has_document_target = bool(target_doc_numbers or target_text)
+    if not has_structured_target and not has_document_target:
         return None
 
     date_candidates = _extract_date_candidates(
-        _norm_space(" ".join([str(edge.get("target_text") or ""), src_text]))
+        _norm_space(" ".join([target_text, source_text]))
     )
 
     return {
         "relation_type": rel,
         "source_id": edge.get("source_id"),
         "target_id": edge.get("target_id"),
+        "source_doc_number": source_doc_number,
+        "target_doc_number": target_doc_numbers[0] if target_doc_numbers else "",
+        "target_doc_numbers": target_doc_numbers,
+        "target_scope": _guess_target_scope(
+            target_article=target_article,
+            target_clause=target_clause,
+            target_point=target_point,
+            target_id=edge.get("target_id"),
+            target_doc_numbers=target_doc_numbers,
+            target_text=target_text,
+        ),
         "target_article": target_article,
         "target_clause": target_clause,
         "target_point": target_point,
-        "source_text": edge.get("source_text"),
-        "target_text": edge.get("target_text"),
+        "source_text": source_text,
+        "target_text": target_text,
         "date_candidates": date_candidates,
     }
 
@@ -384,3 +435,25 @@ def summarize_versioning(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     rows.sort(key=lambda x: (x["article"], x["clause"], x["point"]))
     return rows
+
+def collect_document_version_events(
+    graph: Dict[str, Any],
+    *,
+    source_doc_number: Optional[str] = None,
+    relation_types: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    want_doc = _norm_space(str(source_doc_number or "")).upper()
+    allowed = {str(x).upper() for x in (relation_types or []) if str(x).strip()}
+
+    out: List[Dict[str, Any]] = []
+    for evt in collect_version_events(graph):
+        if evt.get("target_scope") != "document":
+            continue
+        if want_doc and _norm_space(str(evt.get("source_doc_number") or "")).upper() != want_doc:
+            continue
+        rel = str(evt.get("relation_type") or "").upper()
+        if allowed and rel not in allowed:
+            continue
+        out.append(evt)
+
+    return out
