@@ -10,6 +10,9 @@ from src.rag.hybrid import tokenize
 from src.utils.loader import load_document
 
 
+ARTIFACTS_FOR_BM25 = {"evidence", "article_bundle", "doc_sketch"}
+
+
 def iter_chunk_texts_from_normalized(
     input_dir: str = "data/normalized",
     glob_pattern: str = "*.*",
@@ -27,17 +30,17 @@ def iter_chunk_texts_from_normalized(
             continue
 
         raw_text = load_document(fp)
-        chunks = legal_chunk(raw_text, max_chars=max_chars, overlap=overlap)
+        chunks = legal_chunk(raw_text, max_chars=max_chars, overlap=overlap, fallback_doc_name=fp.stem)
 
         for chunk in chunks:
             if not isinstance(chunk, dict):
                 text = str(chunk).strip()
             else:
-                text = str(
-                    chunk.get("retrieval_text")
-                    or chunk.get("text")
-                    or ""
-                ).strip()
+                md = dict(chunk.get("metadata") or {})
+                artifact = str(md.get("artifact_type") or "evidence")
+                if artifact not in ARTIFACTS_FOR_BM25:
+                    continue
+                text = str(chunk.get("retrieval_text") or chunk.get("text") or "").strip()
             if text:
                 texts.append(text)
 
@@ -52,7 +55,6 @@ def build_bm25_stats_from_texts(texts: List[str]) -> Dict[str, Any]:
         tokens = tokenize(text)
         if not tokens:
             continue
-
         tokenized_docs.append(tokens)
         for tok in set(tokens):
             df[tok] = df.get(tok, 0) + 1
@@ -67,12 +69,7 @@ def build_bm25_stats_from_texts(texts: List[str]) -> Dict[str, Any]:
     for tok, freq in df.items():
         idf[tok] = math.log(1.0 + (n_docs - freq + 0.5) / (freq + 0.5))
 
-    return {
-        "N": n_docs,
-        "avgdl": float(avgdl),
-        "df": df,
-        "idf": idf,
-    }
+    return {"N": n_docs, "avgdl": float(avgdl), "df": df, "idf": idf}
 
 
 def build_bm25_stats_from_normalized(
@@ -97,7 +94,7 @@ def save_bm25_stats(stats: Dict[str, Any], output_path: str) -> None:
 
 
 def load_bm25_stats(path: str) -> Dict[str, Any]:
-    p = Path(path)
-    if not p.exists():
-        raise RuntimeError(f"Missing BM25 stats file: {p}")
-    return json.loads(p.read_text(encoding="utf-8"))
+    fp = Path(path)
+    if not fp.exists():
+        raise RuntimeError(f"Missing BM25 stats file: {fp}")
+    return json.loads(fp.read_text(encoding="utf-8"))

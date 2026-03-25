@@ -3,25 +3,29 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
-from collections import Counter, defaultdict
+import re
+from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
+from src.rag.auto_filter import infer_filters, infer_query_profile
 from src.rag.hybrid import bm25_score, tokenize
 from src.rag.openai_clients import get_embedings
 from src.rag.rerank_cross import cross_rerank
 
 logger = logging.getLogger(__name__)
 
-SUMMARY_EDGE = "HAS_CHILD_SUMMARY"
-SUMMARIZES_EDGE = "SUMMARIZES"
-_DOCUMENT_TOP_K = 2
-_PASSAGES_PER_DOC = 5
-_FINAL_TOP_K = 5
+_DOCUMENT_TOP_K = 3
+_PASSAGES_PER_DOC = 8
+_FINAL_TOP_K = 8
 
 _DOC_EMBED_CACHE: Dict[str, List[float]] = {}
 _PASSAGE_EMBED_CACHE: Dict[str, List[float]] = {}
 _QUESTION_EMBED_CACHE: Dict[str, List[float]] = {}
 
+
+# =========================
+# Basic helpers
+# =========================
 
 def _norm_space(text: str) -> str:
     return " ".join((text or "").split()).strip()
@@ -57,6 +61,16 @@ def _cosine(a: List[float], b: List[float]) -> float:
     return float(dot / (math.sqrt(na) * math.sqrt(nb)))
 
 
+def _minmax(values: List[float]) -> List[float]:
+    if not values:
+        return []
+    lo = min(values)
+    hi = max(values)
+    if math.isclose(lo, hi):
+        return [1.0 if hi > 0 else 0.0 for _ in values]
+    return [(v - lo) / (hi - lo) for v in values]
+
+
 def _node_index(graph: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     idx = graph.get("node_index", {}) or {}
     if idx:
@@ -74,102 +88,48 @@ def _node_index(graph: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
-def _adjacency(graph: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
-    adj = graph.get("adjacency", {}) or {}
-    if adj:
-        return adj
-    runtime_cache = _graph_runtime_cache(graph)
-    cached = runtime_cache.get("adjacency") or {}
-    if cached:
-        return cached
-    out: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    for edge in graph.get("edges", []) or []:
-        source_id = str(edge.get("source_id") or "").strip()
-        if source_id:
-            out[source_id].append(edge)
-    runtime_cache["adjacency"] = dict(out)
-    return runtime_cache["adjacency"]
-
-
-def _reverse_adjacency(graph: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
-    rev = graph.get("reverse_adjacency", {}) or {}
-    if rev:
-        return rev
-    runtime_cache = _graph_runtime_cache(graph)
-    cached = runtime_cache.get("reverse_adjacency") or {}
-    if cached:
-        return cached
-    out: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    for edge in graph.get("edges", []) or []:
-        target_id = str(edge.get("target_id") or "").strip()
-        if target_id:
-            out[target_id].append(edge)
-    runtime_cache["reverse_adjacency"] = dict(out)
-    return runtime_cache["reverse_adjacency"]
-
-
-def _candidate_doc_key(metadata: Dict[str, Any]) -> str:
-    law_name = str(metadata.get("law_name") or metadata.get("official_title") or "").strip().lower()
-    if law_name:
-        return law_name
-
-    document_id = str(metadata.get("document_id") or "").strip().lower()
-    if document_id:
-        return document_id
-
-    file_name = str(metadata.get("file_name") or metadata.get("filename") or metadata.get("file_stem") or "").strip().lower()
-    if file_name:
-        return file_name
-
-    chunk_id = str(metadata.get("chunk_id") or "").strip().lower()
-    if "::" in chunk_id:
-        return chunk_id.split("::")[0]
-
-    source_path = str(metadata.get("source_path") or metadata.get("file_path") or "").strip().lower()
-    if source_path:
-        return source_path
-
-    source = str(metadata.get("source") or metadata.get("issuing_agency") or "").strip().lower()
-    if source:
-        return source
-
-    return "unknown"
+def _artifact_type(node: Dict[str, Any]) -> str:
+    return str((node.get("metadata", {}) or {}).get("artifact_type") or "evidence").strip().lower()
 
 
 def _node_type(node: Dict[str, Any]) -> str:
-    return str(node.get("node_type") or "").strip().lower()
+    return str(node.get("node_type") or (node.get("metadata", {}) or {}).get("node_type") or "").strip().lower()
 
 
-def _summary_level(node: Dict[str, Any]) -> str:
-    return str((node.get("metadata", {}) or {}).get("summary_level") or "").strip().lower()
-
-
-def _is_summary_node(node: Dict[str, Any]) -> bool:
-    md = node.get("metadata", {}) or {}
-    return md.get("artifact_type") == "summary"
-
-
-def _is_evidence_node(node: Dict[str, Any]) -> bool:
-    md = node.get("metadata", {}) or {}
-    return md.get("artifact_type") == "evidence"
+def _candidate_doc_key(metadata: Dict[str, Any]) -> str:
+    for key in ["doc_id", "law_name", "official_title", "document_title", "file_stem"]:
+        value = str(metadata.get(key) or "").strip().lower()
+        if value:
+            return value
+    return "unknown"
 
 
 def _path_label(md: Dict[str, Any]) -> str:
-    for key in ["path_title", "title", "article", "clause", "point", "section", "subsection"]:
+    for key in ["path_title", "title", "heading_title", "article", "clause", "point"]:
         value = md.get(key)
         if value is not None and str(value).strip():
             return str(value).strip()
     return "-"
 
 
-def _rrf_fuse(rank_lists: List[List[str]], *, k: int = 60) -> Dict[str, float]:
-    scores: Dict[str, float] = defaultdict(float)
-    for ranked in rank_lists:
-        for rank, item_id in enumerate(ranked, start=1):
-            if not item_id:
-                continue
-            scores[item_id] += 1.0 / (k + rank)
-    return dict(scores)
+def _first_sentences(text: str, *, max_sentences: int = 2, max_chars: int = 420) -> str:
+    clean = _norm_space(text)
+    if not clean:
+        return ""
+    parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+", clean) if part and part.strip()]
+    if not parts:
+        return clean[:max_chars]
+    merged = " ".join(parts[: max(1, int(max_sentences))]).strip()
+    if len(merged) <= max_chars:
+        return merged
+    return merged[: max(0, max_chars - 3)].rstrip() + "..."
+
+
+def _short(text: str, *, limit: int = 260) -> str:
+    clean = _norm_space(text)
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - 3)].rstrip() + "..."
 
 
 def _batch_embed_texts(texts: List[str], *, cache: Dict[str, List[float]]) -> Dict[str, List[float]]:
@@ -188,7 +148,6 @@ def _batch_embed_texts(texts: List[str], *, cache: Dict[str, List[float]]) -> Di
         for (key, _), vec in zip(misses, vectors):
             cache[key] = list(vec)
             out[key] = cache[key]
-
     return out
 
 
@@ -213,40 +172,25 @@ def _sorted_ids_by_score(items: List[Dict[str, Any]], score_key: str) -> List[st
     return [str(item.get("id") or "") for item in ranked if str(item.get("id") or "")]
 
 
-def _infer_node_doc_keys(
-    node_id: str,
-    node_idx: Dict[str, Dict[str, Any]],
-    adjacency: Dict[str, List[Dict[str, Any]]],
-    cache: Dict[str, Set[str]],
-) -> Set[str]:
-    if node_id in cache:
-        return cache[node_id]
-
-    node = node_idx.get(node_id) or {}
-    md = node.get("metadata", {}) or {}
-    direct_doc_key = _candidate_doc_key(md)
-    if direct_doc_key != "unknown":
-        cache[node_id] = {direct_doc_key}
-        return cache[node_id]
-
-    doc_keys: Set[str] = set()
-
-    for source_id in md.get("source_node_ids", []) or []:
-        source_id = str(source_id or "").strip()
-        if source_id and source_id in node_idx:
-            doc_keys.update(_infer_node_doc_keys(source_id, node_idx, adjacency, cache))
-
-    if not doc_keys:
-        for edge in adjacency.get(node_id, []) or []:
-            rel = str(edge.get("relation_type") or "").strip().upper()
-            if rel not in {SUMMARY_EDGE, SUMMARIZES_EDGE}:
+def _rrf_fuse(rank_lists: List[List[str]], *, k: int = 60) -> Dict[str, float]:
+    scores: Dict[str, float] = defaultdict(float)
+    for ranked in rank_lists:
+        for rank, item_id in enumerate(ranked, start=1):
+            if not item_id:
                 continue
-            child_id = str(edge.get("target_id") or "").strip()
-            if child_id and child_id in node_idx:
-                doc_keys.update(_infer_node_doc_keys(child_id, node_idx, adjacency, cache))
+            scores[item_id] += 1.0 / (k + rank)
+    return dict(scores)
 
-    cache[node_id] = doc_keys
-    return doc_keys
+
+# =========================
+# Graph catalog
+# =========================
+
+def _sorted_node_ids(node_ids: Iterable[str], node_idx: Dict[str, Dict[str, Any]]) -> List[str]:
+    return sorted(
+        {str(nid) for nid in node_ids if str(nid)},
+        key=lambda nid: int((node_idx.get(nid, {}).get("metadata", {}) or {}).get("order_index") or 0),
+    )
 
 
 def _build_doc_catalog(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -256,77 +200,136 @@ def _build_doc_catalog(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
         return cached
 
     node_idx = _node_index(graph)
-    adjacency = _adjacency(graph)
-    infer_cache: Dict[str, Set[str]] = {}
     buckets: Dict[str, Dict[str, Any]] = {}
 
     for node_id, node in node_idx.items():
-        md = node.get("metadata", {}) or {}
-        doc_keys = _infer_node_doc_keys(node_id, node_idx, adjacency, infer_cache)
-        if not doc_keys:
-            direct = _candidate_doc_key(md)
-            if direct != "unknown":
-                doc_keys = {direct}
-        if len(doc_keys) != 1:
+        md = dict(node.get("metadata") or {})
+        doc_key = _candidate_doc_key(md)
+        if doc_key == "unknown":
             continue
-        doc_key = next(iter(doc_keys))
         bucket = buckets.setdefault(
             doc_key,
             {
                 "id": doc_key,
                 "doc_key": doc_key,
-                "law_name": md.get("official_title") or md.get("law_name") or md.get("document_title") or doc_key,
+                "doc_id": md.get("doc_id") or doc_key,
+                "law_name": md.get("official_title") or md.get("law_name") or doc_key,
                 "law_type": md.get("doc_type") or md.get("law_type") or "Unknown",
                 "source": md.get("source") or md.get("issuing_agency") or "LocalFile",
-                "doc_summary": "",
-                "doc_summary_node_id": None,
+                "year": int(md.get("year") or 0),
+                "doc_number": md.get("doc_number") or "",
+                "doc_sketch": "",
+                "doc_sketch_node_id": None,
+                "doc_sketch_source_node_ids": [],
+                "article_bundle_ids": [],
+                "evidence_ids": [],
+                "summary_ids": [],
+                "article_to_bundle_id": {},
+                "article_to_evidence_ids": defaultdict(list),
                 "member_node_ids": set(),
-                "summary_node_ids": set(),
-                "base_summary_node_ids": set(),
             },
         )
         bucket["member_node_ids"].add(node_id)
 
-        node_text = _norm_space(str(node.get("text") or ""))
-        if _is_summary_node(node):
-            bucket["summary_node_ids"].add(node_id)
-            if _summary_level(node) == "document" and node_text:
-                bucket["doc_summary"] = node_text
-                bucket["doc_summary_node_id"] = node_id
-            elif _summary_level(node) != "document":
-                bucket["base_summary_node_ids"].add(node_id)
-
-        if not bucket["doc_summary"]:
-            md_summary = _norm_space(str(md.get("doc_summary") or ""))
-            if md_summary:
-                bucket["doc_summary"] = md_summary
+        artifact = _artifact_type(node)
+        if artifact == "doc_sketch":
+            bucket["doc_sketch"] = _norm_space(str(node.get("text") or ""))
+            bucket["doc_sketch_node_id"] = node_id
+            bucket["doc_sketch_source_node_ids"] = list(md.get("source_node_ids") or [])
+        elif artifact == "article_bundle":
+            bucket["article_bundle_ids"].append(node_id)
+            article = str(md.get("article") or "").strip()
+            if article and article not in bucket["article_to_bundle_id"]:
+                bucket["article_to_bundle_id"][article] = node_id
+        elif artifact == "evidence":
+            bucket["evidence_ids"].append(node_id)
+            article = str(md.get("article") or "").strip()
+            if article:
+                bucket["article_to_evidence_ids"][article].append(node_id)
+        elif artifact == "summary":
+            bucket["summary_ids"].append(node_id)
 
     out: List[Dict[str, Any]] = []
     for bucket in buckets.values():
+        bucket["article_bundle_ids"] = _sorted_node_ids(bucket["article_bundle_ids"], node_idx)
+        bucket["evidence_ids"] = _sorted_node_ids(bucket["evidence_ids"], node_idx)
+        bucket["summary_ids"] = _sorted_node_ids(bucket["summary_ids"], node_idx)
         bucket["member_node_ids"] = sorted(bucket["member_node_ids"])
-        bucket["summary_node_ids"] = sorted(bucket["summary_node_ids"])
-        bucket["base_summary_node_ids"] = sorted(bucket["base_summary_node_ids"])
-        if bucket["doc_summary"]:
-            out.append(bucket)
+        bucket["article_to_evidence_ids"] = {
+            art: _sorted_node_ids(ids, node_idx) for art, ids in bucket["article_to_evidence_ids"].items()
+        }
+        if not bucket["doc_sketch"]:
+            article_titles = []
+            for bundle_id in bucket["article_bundle_ids"][:15]:
+                md = dict((node_idx.get(bundle_id) or {}).get("metadata") or {})
+                title = _path_label(md)
+                if title:
+                    article_titles.append(title)
+            parts = []
+            if bucket["law_type"]:
+                parts.append(f"Loại văn bản: {bucket['law_type']}")
+            if bucket["law_name"]:
+                parts.append(f"Tiêu đề: {bucket['law_name']}")
+            if bucket["doc_number"]:
+                parts.append(f"Số văn bản: {bucket['doc_number']}")
+            if article_titles:
+                parts.append("Các điều chính:\n" + "\n".join(f"- {x}" for x in article_titles))
+            bucket["doc_sketch"] = "\n".join(parts).strip()
+        out.append(bucket)
 
-    runtime_cache["doc_catalog"] = sorted(out, key=lambda x: str(x.get("law_name") or x.get("doc_key") or ""))
-    return runtime_cache["doc_catalog"]
+    out.sort(key=lambda x: str(x.get("law_name") or x.get("doc_key") or ""))
+    runtime_cache["doc_catalog"] = out
+    return out
 
 
-def rank_documents_by_summary_rrf(
+def _matches_filters(doc_or_md: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+    if not filters:
+        return True
+    for key in ["law_type", "doc_number"]:
+        want = _norm_space(str(filters.get(key) or ""))
+        if not want:
+            continue
+        have = _norm_space(str(doc_or_md.get(key) or doc_or_md.get(key.lower()) or ""))
+        if want.lower() != have.lower():
+            return False
+    want_year = int(filters.get("year") or 0)
+    if want_year and int(doc_or_md.get("year") or 0) != want_year:
+        return False
+    return True
+
+
+# =========================
+# Ranking helpers
+# =========================
+
+def _doc_boost(doc: Dict[str, Any], query_profile: Dict[str, Any]) -> float:
+    boost = 0.0
+    filters = query_profile.get("filters") or {}
+    doc_number = _norm_space(str(filters.get("doc_number") or ""))
+    if doc_number and doc_number.lower() == _norm_space(str(doc.get("doc_number") or "")).lower():
+        boost += 0.35
+    law_type = _norm_space(str(filters.get("law_type") or ""))
+    if law_type and law_type.lower() == _norm_space(str(doc.get("law_type") or "")).lower():
+        boost += 0.08
+    return boost
+
+
+def rank_documents_by_sketch_rrf(
     question: str,
     graph: Dict[str, Any],
     *,
     top_k: int = _DOCUMENT_TOP_K,
     question_vec: Optional[List[float]] = None,
+    filters: Optional[Dict[str, Any]] = None,
+    query_profile: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    docs = _build_doc_catalog(graph)
+    docs = [d for d in _build_doc_catalog(graph) if _matches_filters(d, filters or {})]
     if not docs:
         return []
 
-    question_vec = question_vec or _question_embedding(question)
-    summary_texts = [str(doc.get("doc_summary") or "") for doc in docs]
-    summary_embeds = _batch_embed_texts(summary_texts, cache=_DOC_EMBED_CACHE)
+    qv = question_vec or _question_embedding(question)
+    sketch_texts = [str(doc.get("doc_sketch") or "") for doc in docs]
+    sketch_embeds = _batch_embed_texts(sketch_texts, cache=_DOC_EMBED_CACHE)
 
     dense_items: List[Dict[str, Any]] = []
     bm25_items: List[Dict[str, Any]] = []
@@ -334,13 +337,13 @@ def rank_documents_by_summary_rrf(
 
     for doc in docs:
         doc_id = str(doc.get("id") or "")
-        summary_text = str(doc.get("doc_summary") or "")
-        embed = summary_embeds.get(_text_cache_key(summary_text), [])
-        dense_score = _cosine(question_vec, embed)
-        bm25_val = _bm25_value(question, summary_text)
-        item = {"id": doc_id, "dense_score": dense_score, "bm25_score": bm25_val}
-        dense_items.append(item)
-        bm25_items.append(item)
+        sketch_text = str(doc.get("doc_sketch") or "")
+        embed = sketch_embeds.get(_text_cache_key(sketch_text), [])
+        dense_score = _cosine(qv, embed)
+        bm25_val = _bm25_value(question, sketch_text)
+        boost = _doc_boost(doc, query_profile or {})
+        dense_items.append({"id": doc_id, "dense_score": dense_score + boost})
+        bm25_items.append({"id": doc_id, "bm25_score": bm25_val + boost})
         id_to_doc[doc_id] = doc
 
     fused = _rrf_fuse([
@@ -350,15 +353,16 @@ def rank_documents_by_summary_rrf(
 
     ranked: List[Dict[str, Any]] = []
     for doc_id, doc in id_to_doc.items():
-        summary_text = str(doc.get("doc_summary") or "")
-        embed = summary_embeds.get(_text_cache_key(summary_text), [])
-        dense_score = _cosine(question_vec, embed)
-        bm25_val = _bm25_value(question, summary_text)
+        sketch_text = str(doc.get("doc_sketch") or "")
+        embed = sketch_embeds.get(_text_cache_key(sketch_text), [])
+        dense_score = _cosine(qv, embed)
+        bm25_val = _bm25_value(question, sketch_text)
+        boost = _doc_boost(doc, query_profile or {})
         item = dict(doc)
-        item["text"] = summary_text
+        item["text"] = sketch_text
         item["dense_score"] = float(dense_score)
         item["bm25_score"] = float(bm25_val)
-        item["rrf_score"] = float(fused.get(doc_id, 0.0))
+        item["rrf_score"] = float(fused.get(doc_id, 0.0) + boost)
         item["hybrid_score"] = item["rrf_score"]
         ranked.append(item)
 
@@ -366,452 +370,366 @@ def rank_documents_by_summary_rrf(
     return ranked[: max(1, int(top_k or _DOCUMENT_TOP_K))]
 
 
-def _same_doc(summary_node_id: str, allowed_summary_ids: Set[str]) -> bool:
-    return summary_node_id in allowed_summary_ids
+def _field_dense_bm25(question: str, texts: List[str], question_vec: List[float]) -> Tuple[List[float], List[float]]:
+    embeds = _batch_embed_texts(texts, cache=_PASSAGE_EMBED_CACHE)
+    dense: List[float] = []
+    bm25_vals: List[float] = []
+    for text in texts:
+        embed = embeds.get(_text_cache_key(text), [])
+        dense.append(_cosine(question_vec, embed))
+        bm25_vals.append(_bm25_value(question, text))
+    return _minmax(dense), _minmax(bm25_vals)
 
 
-def _one_hop_summary_relations(
-    node_id: str,
-    graph: Dict[str, Any],
-    *,
-    allowed_summary_ids: Set[str],
-) -> Tuple[List[str], List[str], List[str]]:
-    adjacency = _adjacency(graph)
-    reverse = _reverse_adjacency(graph)
+def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any]) -> float:
+    profile = query_profile or {}
+    route = str(profile.get("route") or "")
+    md = dict(passage.get("metadata") or {})
+    artifact = str(md.get("artifact_type") or "")
+    heading = _norm_space(str(passage.get("heading_text") or "")).lower()
+    self_text = _norm_space(str(passage.get("self_retrieval_text") or "")).lower()
+    boost = 0.0
 
-    parents: List[str] = []
-    children: List[str] = []
-    siblings: List[str] = []
-    sibling_seen: Set[str] = set()
+    if route == "heading_list":
+        primary = str(profile.get("primary_heading_term") or "").lower()
+        if artifact == "article_bundle":
+            boost += 0.18
+        if primary and primary in heading:
+            boost += 0.20
+        conflicting = [str(x).lower() for x in (profile.get("conflicting_heading_terms") or [])]
+        if conflicting and any(term in heading for term in conflicting) and primary not in heading:
+            boost -= 0.18
 
-    for edge in reverse.get(node_id, []) or []:
-        if str(edge.get("relation_type") or "").strip().upper() != SUMMARY_EDGE:
-            continue
-        parent_id = str(edge.get("source_id") or "").strip()
-        if parent_id and _same_doc(parent_id, allowed_summary_ids):
-            parents.append(parent_id)
+    if route == "version_change":
+        terms = [str(x).lower() for x in (profile.get("change_terms") or [])]
+        if any(term in heading or term in self_text for term in terms):
+            boost += 0.18
 
-    for edge in adjacency.get(node_id, []) or []:
-        if str(edge.get("relation_type") or "").strip().upper() != SUMMARY_EDGE:
-            continue
-        child_id = str(edge.get("target_id") or "").strip()
-        if child_id and _same_doc(child_id, allowed_summary_ids):
-            children.append(child_id)
+    if route == "direct_reference":
+        filters = profile.get("filters") or {}
+        if filters.get("article") and _norm_space(str(filters.get("article"))).lower() == _norm_space(str(md.get("article") or "")).lower():
+            boost += 0.12
+        if filters.get("clause") and _norm_space(str(filters.get("clause"))).lower() == _norm_space(str(md.get("clause") or "")).lower():
+            boost += 0.18
+        if filters.get("point") and _norm_space(str(filters.get("point"))).lower() == _norm_space(str(md.get("point") or "")).lower():
+            boost += 0.20
 
-    for parent_id in parents:
-        for edge in adjacency.get(parent_id, []) or []:
-            if str(edge.get("relation_type") or "").strip().upper() != SUMMARY_EDGE:
-                continue
-            sib_id = str(edge.get("target_id") or "").strip()
-            if not sib_id or sib_id == node_id or not _same_doc(sib_id, allowed_summary_ids):
-                continue
-            if sib_id not in sibling_seen:
-                sibling_seen.add(sib_id)
-                siblings.append(sib_id)
+    if route == "condition_circumstance":
+        if any(term in self_text for term in ["trường hợp", "khi", "nếu"]):
+            boost += 0.06
 
-    return sorted(set(parents)), sorted(set(children)), siblings
+    return boost
 
 
-def _format_context_blocks(label: str, texts: Iterable[str]) -> str:
-    clean = [_norm_space(text) for text in texts if _norm_space(text)]
-    if not clean:
-        return ""
-    return f"[{label}]\n" + "\n".join(clean)
-
-
-def _path_line(md: Dict[str, Any], *, suffix: str) -> str:
-    return f"[Vị trí] {_path_label(md)} | {suffix}"
-
-
-def _short_anchor(text: str, *, limit: int = 240) -> str:
-    clean = _norm_space(text)
-    if len(clean) <= limit:
-        return clean
-    return clean[: max(0, limit - 3)].rstrip() + "..."
-
-
-def _build_shared_local_fields(passages: List[Dict[str, Any]], doc_info: Dict[str, Any]) -> None:
-    if not passages:
-        return
-
-    doc_title = _norm_space(str(doc_info.get("law_name") or doc_info.get("doc_key") or ""))
-    doc_summary = _norm_space(str(doc_info.get("doc_summary") or ""))
-
-    parent_counter: Counter[str] = Counter()
-    sibling_counter: Counter[str] = Counter()
-    child_counter: Counter[str] = Counter()
-
-    for passage in passages:
-        raw = passage.get("_raw_context") or {}
-        parent_counter.update({_norm_space(text): 1 for text in raw.get("parent_texts", []) or [] if _norm_space(text)})
-        sibling_counter.update({_norm_space(text): 1 for text in raw.get("sibling_texts", []) or [] if _norm_space(text)})
-        child_counter.update({_norm_space(text): 1 for text in raw.get("child_texts", []) or [] if _norm_space(text)})
-
-    shared_parent_texts = [text for text, count in parent_counter.items() if count >= 2]
-    shared_sibling_texts = [text for text, count in sibling_counter.items() if count >= 2]
-    shared_child_texts = [text for text, count in child_counter.items() if count >= 2]
-
-    shared_parts: List[str] = []
-    if doc_title:
-        shared_parts.append(f"[Văn bản] {doc_title}")
-    if doc_summary:
-        shared_parts.append(f"[Tóm tắt văn bản]\n{doc_summary}")
-    parent_block = _format_context_blocks("Cha chung", shared_parent_texts)
-    sibling_block = _format_context_blocks("Sibling chung", shared_sibling_texts)
-    child_block = _format_context_blocks("Con chung", shared_child_texts)
-    for block in [parent_block, sibling_block, child_block]:
-        if block:
-            shared_parts.append(block)
-    shared_text = "\n\n".join(part for part in shared_parts if _norm_space(part))
-
-    shared_parent_set = {text.lower() for text in shared_parent_texts}
-    shared_sibling_set = {text.lower() for text in shared_sibling_texts}
-    shared_child_set = {text.lower() for text in shared_child_texts}
-
-    for passage in passages:
-        raw = passage.get("_raw_context") or {}
-        md = dict(passage.get("metadata") or {})
-        unique_parent_texts = [
-            text for text in raw.get("parent_texts", []) or []
-            if _norm_space(text) and _norm_space(text).lower() not in shared_parent_set
-        ]
-        unique_child_texts = [
-            text for text in raw.get("child_texts", []) or []
-            if _norm_space(text) and _norm_space(text).lower() not in shared_child_set
-        ]
-        unique_sibling_texts = [
-            text for text in raw.get("sibling_texts", []) or []
-            if _norm_space(text) and _norm_space(text).lower() not in shared_sibling_set
-        ]
-
-        local_parts: List[str] = []
-
-        self_text = _norm_space(str(raw.get("self_text") or passage.get("text") or ""))
-        if self_text:
-            local_parts.append(f"[Chính node]\n{self_text}")
-
-        if unique_parent_texts:
-            local_parts.append("[Neo cha]\n" + "\n".join(_short_anchor(text) for text in unique_parent_texts[:2]))
-        if unique_child_texts:
-            local_parts.append("[Neo con]\n" + "\n".join(_short_anchor(text) for text in unique_child_texts[:2]))
-        elif unique_sibling_texts:
-            local_parts.append("[Neo sibling]\n" + "\n".join(_short_anchor(text) for text in unique_sibling_texts[:2]))
-
-        passage["shared_text"] = shared_text
-        passage["local_text"] = "\n\n".join(part for part in local_parts if _norm_space(part))
-        passage.setdefault("bundle_text", passage.get("retrieval_text") or passage.get("text") or "")
-
-
-def _join_summary_texts(
-    *,
-    graph: Dict[str, Any],
-    node_id: str,
-    doc_info: Dict[str, Any],
-) -> Dict[str, Any]:
-    node_idx = _node_index(graph)
-    node = node_idx.get(node_id) or {}
-    md = dict(node.get("metadata", {}) or {})
-    allowed_summary_ids = set(doc_info.get("summary_node_ids") or [])
-
-    parents, children, siblings = _one_hop_summary_relations(
-        node_id,
-        graph,
-        allowed_summary_ids=allowed_summary_ids,
-    )
-
-    def _summary_text(nid: str) -> str:
-        return _norm_space(str((node_idx.get(nid) or {}).get("text") or ""))
-
-    self_text = _summary_text(node_id)
-    parent_texts = [_summary_text(nid) for nid in parents if _summary_text(nid)]
-    child_texts = [_summary_text(nid) for nid in children if _summary_text(nid)]
-    sibling_texts = [_summary_text(nid) for nid in siblings if _summary_text(nid)]
-    doc_summary = _norm_space(str(doc_info.get("doc_summary") or ""))
-
-    header = f"[Văn bản] {doc_info.get('law_name') or doc_info.get('doc_key')}"
-    path_line = _path_line(md, suffix=f"summary_level={_summary_level(node) or _node_type(node) or '-'}")
-
-    retrieval_sections: List[str] = [header, path_line]
-    parent_block = _format_context_blocks("Tóm tắt cha 1 hop", parent_texts)
-    child_block = _format_context_blocks("Tóm tắt con 1 hop", child_texts)
-    sibling_block = _format_context_blocks("Tóm tắt sibling cùng cha", sibling_texts)
-    if parent_block:
-        retrieval_sections.append(parent_block)
-    retrieval_sections.append(f"[Tóm tắt chính node]\n{self_text}")
-    if child_block:
-        retrieval_sections.append(child_block)
-    if sibling_block:
-        retrieval_sections.append(sibling_block)
-
-    retrieval_text = "\n\n".join(part for part in retrieval_sections if _norm_space(part))
-
-    rerank_sections: List[str] = [header]
-    if doc_summary:
-        rerank_sections.append(f"[Tóm tắt văn bản]\n{doc_summary}")
-    rerank_sections.append(path_line)
-    if parent_block:
-        rerank_sections.append(parent_block)
-    rerank_sections.append(f"[Tóm tắt chính node]\n{self_text}")
-    if child_block:
-        rerank_sections.append(child_block)
-    rerank_text = "\n\n".join(part for part in rerank_sections if _norm_space(part))
-
-    return {
-        "node_id": node_id,
-        "text": self_text,
-        "snippet": retrieval_text[:700],
-        "bundle_text": retrieval_text,
-        "retrieval_text": retrieval_text,
-        "rerank_text": rerank_text,
-        "shared_text": "",
-        "local_text": "",
-        "metadata": {
-            **md,
-            "doc_key": doc_info.get("doc_key"),
-            "law_name": doc_info.get("law_name") or md.get("law_name"),
-            "law_type": doc_info.get("law_type") or md.get("law_type"),
-            "source": doc_info.get("source") or md.get("source"),
-            "parent_summary_ids": parents,
-            "child_summary_ids": children,
-            "sibling_summary_ids": siblings,
-        },
-        "doc_key": str(doc_info.get("doc_key") or ""),
-        "doc_score": float(doc_info.get("rrf_score", 0.0) or 0.0),
-        "_raw_context": {
-            "self_text": self_text,
-            "parent_texts": parent_texts,
-            "child_texts": child_texts,
-            "sibling_texts": sibling_texts,
-            "path_suffix": f"summary_level={_summary_level(node) or _node_type(node) or '-'}",
-        },
-    }
-
-
-def _join_evidence_texts(
-    *,
-    graph: Dict[str, Any],
-    node_id: str,
-    doc_info: Dict[str, Any],
-) -> Dict[str, Any]:
-    node_idx = _node_index(graph)
-    node = node_idx.get(node_id) or {}
-    md = dict(node.get("metadata", {}) or {})
-    allowed_member_ids = set(doc_info.get("member_node_ids") or [])
-
-    def _evidence_text(nid: str) -> str:
-        if not nid or nid not in allowed_member_ids:
-            return ""
-        target = node_idx.get(nid) or {}
-        return _norm_space(str(target.get("text") or ""))
-
-    parent_ids: List[str] = []
-    parent_id = str(md.get("parent_id") or "").strip()
-    if parent_id and parent_id in allowed_member_ids:
-        parent_ids.append(parent_id)
-
-    child_ids: List[str] = []
-    for nid in md.get("children_ids", []) or []:
-        cid = str(nid or "").strip()
-        if cid and cid in allowed_member_ids:
-            child_ids.append(cid)
-
-    sibling_ids: List[str] = []
-    for nid in md.get("sibling_ids", []) or []:
-        sid = str(nid or "").strip()
-        if sid and sid in allowed_member_ids:
-            sibling_ids.append(sid)
-
-    self_text = _norm_space(str(node.get("text") or ""))
-    parent_texts = [_evidence_text(nid) for nid in parent_ids if _evidence_text(nid)]
-    child_texts = [_evidence_text(nid) for nid in child_ids if _evidence_text(nid)]
-    sibling_texts = [_evidence_text(nid) for nid in sibling_ids if _evidence_text(nid)]
-    doc_summary = _norm_space(str(doc_info.get("doc_summary") or ""))
-
-    header = f"[Văn bản] {doc_info.get('law_name') or doc_info.get('doc_key')}"
-    path_line = _path_line(md, suffix=f"node_type={_node_type(node) or '-'}")
-
-    retrieval_sections: List[str] = [header, path_line]
-    parent_block = _format_context_blocks("Cha 1 hop", parent_texts)
-    child_block = _format_context_blocks("Con 1 hop", child_texts)
-    sibling_block = _format_context_blocks("Sibling cùng cha", sibling_texts)
-    if parent_block:
-        retrieval_sections.append(parent_block)
-    retrieval_sections.append(f"[Chính node]\n{self_text}")
-    if child_block:
-        retrieval_sections.append(child_block)
-    if sibling_block:
-        retrieval_sections.append(sibling_block)
-
-    retrieval_text = "\n\n".join(part for part in retrieval_sections if _norm_space(part))
-
-    rerank_sections: List[str] = [header]
-    if doc_summary:
-        rerank_sections.append(f"[Tóm tắt văn bản]\n{doc_summary}")
-    rerank_sections.append(path_line)
-    if parent_block:
-        rerank_sections.append(parent_block)
-    rerank_sections.append(f"[Chính node]\n{self_text}")
-    if child_block:
-        rerank_sections.append(child_block)
-    rerank_text = "\n\n".join(part for part in rerank_sections if _norm_space(part))
-
-    return {
-        "node_id": node_id,
-        "text": self_text,
-        "snippet": retrieval_text[:700],
-        "bundle_text": retrieval_text,
-        "retrieval_text": retrieval_text,
-        "rerank_text": rerank_text,
-        "shared_text": "",
-        "local_text": "",
-        "metadata": {
-            **md,
-            "doc_key": doc_info.get("doc_key"),
-            "law_name": doc_info.get("law_name") or md.get("law_name"),
-            "law_type": doc_info.get("law_type") or md.get("law_type"),
-            "source": doc_info.get("source") or md.get("source"),
-            "parent_node_ids": parent_ids,
-            "child_node_ids": child_ids,
-            "sibling_node_ids": sibling_ids,
-        },
-        "doc_key": str(doc_info.get("doc_key") or ""),
-        "doc_score": float(doc_info.get("rrf_score", 0.0) or 0.0),
-        "_raw_context": {
-            "self_text": self_text,
-            "parent_texts": parent_texts,
-            "child_texts": child_texts,
-            "sibling_texts": sibling_texts,
-            "path_suffix": f"node_type={_node_type(node) or '-'}",
-        },
-    }
-
-
-def _build_candidate_passages_for_doc(question: str, graph: Dict[str, Any], doc_info: Dict[str, Any]) -> List[Dict[str, Any]]:
-    _ = question
-    node_idx = _node_index(graph)
-    summary_ids = list(doc_info.get("base_summary_node_ids") or [])
-    evidence_ids: List[str] = []
-    for node_id in doc_info.get("member_node_ids") or []:
-        node = node_idx.get(str(node_id)) or {}
-        if _is_evidence_node(node):
-            evidence_ids.append(str(node_id))
-
-    candidates: List[Dict[str, Any]] = []
-    used_ids: Set[str] = set()
-
-    for node_id in summary_ids:
-        if node_id in used_ids:
-            continue
-        used_ids.add(node_id)
-        joined = _join_summary_texts(graph=graph, node_id=node_id, doc_info=doc_info)
-        if _norm_space(str(joined.get("retrieval_text") or "")):
-            candidates.append(joined)
-
-    for node_id in evidence_ids:
-        if node_id in used_ids:
-            continue
-        used_ids.add(node_id)
-        joined = _join_evidence_texts(graph=graph, node_id=node_id, doc_info=doc_info)
-        if _norm_space(str(joined.get("retrieval_text") or "")):
-            candidates.append(joined)
-
-    if not candidates and doc_info.get("doc_summary"):
-        fallback_text = _norm_space(str(doc_info.get("doc_summary") or ""))
-        candidates.append({
-            "node_id": str(doc_info.get("doc_summary_node_id") or doc_info.get("doc_key") or doc_info.get("id") or ""),
-            "text": fallback_text,
-            "snippet": fallback_text[:700],
-            "bundle_text": fallback_text,
-            "retrieval_text": fallback_text,
-            "rerank_text": fallback_text,
-            "shared_text": f"[Văn bản] {doc_info.get('law_name') or doc_info.get('doc_key')}\n\n[Tóm tắt văn bản]\n{fallback_text}",
-            "local_text": "[Chính node]\n" + fallback_text,
-            "metadata": {
-                "doc_key": doc_info.get("doc_key"),
-                "law_name": doc_info.get("law_name"),
-                "law_type": doc_info.get("law_type"),
-                "source": doc_info.get("source"),
-                "path_title": "Tóm tắt văn bản",
-                "node_type": "document_summary",
-            },
-            "doc_key": str(doc_info.get("doc_key") or ""),
-            "doc_score": float(doc_info.get("rrf_score", 0.0) or 0.0),
-            "_raw_context": {
-                "self_text": fallback_text,
-                "parent_texts": [],
-                "child_texts": [],
-                "sibling_texts": [],
-                "path_suffix": "node_type=document_summary",
-            },
-        })
-
-    return candidates
-
-
-def _rank_passages_rrf(
+def _rank_passages_multifield(
     question: str,
     passages: List[Dict[str, Any]],
     *,
     question_vec: Optional[List[float]] = None,
+    query_profile: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     if not passages:
         return []
 
-    question_vec = question_vec or _question_embedding(question)
-    joined_texts = [str(p.get("retrieval_text") or "") for p in passages]
-    embeds = _batch_embed_texts(joined_texts, cache=_PASSAGE_EMBED_CACHE)
+    qv = question_vec or _question_embedding(question)
+    self_texts = [str(p.get("self_retrieval_text") or p.get("text") or "") for p in passages]
+    heading_texts = [str(p.get("heading_text") or "") for p in passages]
+    context_texts = [str(p.get("context_text") or "") for p in passages]
 
-    dense_items: List[Dict[str, Any]] = []
-    bm25_items: List[Dict[str, Any]] = []
-
-    for passage in passages:
-        pid = str(passage.get("node_id") or "")
-        joined_text = str(passage.get("retrieval_text") or "")
-        embed = embeds.get(_text_cache_key(joined_text), [])
-        dense_score = _cosine(question_vec, embed)
-        bm25_val = _bm25_value(question, joined_text)
-        dense_items.append({"id": pid, "dense_score": dense_score})
-        bm25_items.append({"id": pid, "bm25_score": bm25_val})
-
-    fused = _rrf_fuse([
-        _sorted_ids_by_score(dense_items, "dense_score"),
-        _sorted_ids_by_score(bm25_items, "bm25_score"),
-    ])
+    self_dense, self_bm25 = _field_dense_bm25(question, self_texts, qv)
+    head_dense, head_bm25 = _field_dense_bm25(question, heading_texts, qv)
+    ctx_dense, ctx_bm25 = _field_dense_bm25(question, context_texts, qv)
 
     ranked: List[Dict[str, Any]] = []
-    for item in passages:
-        pid = str(item.get("node_id") or "")
-        joined_text = str(item.get("retrieval_text") or "")
-        embed = embeds.get(_text_cache_key(joined_text), [])
-        dense_score = _cosine(question_vec, embed)
-        bm25_val = _bm25_value(question, joined_text)
+    for idx, item in enumerate(passages):
+        self_score = 0.60 * self_dense[idx] + 0.40 * self_bm25[idx]
+        heading_score = 0.45 * head_dense[idx] + 0.55 * head_bm25[idx]
+        context_score = 0.65 * ctx_dense[idx] + 0.35 * ctx_bm25[idx]
+        boost = _passage_route_bonus(item, query_profile or {})
         enriched = dict(item)
-        enriched["dense_score"] = float(dense_score)
-        enriched["bm25_score"] = float(bm25_val)
-        enriched["rrf_score"] = float(fused.get(pid, 0.0))
-        enriched["hybrid_score"] = enriched["rrf_score"]
+        enriched["self_score"] = float(self_score)
+        enriched["heading_score"] = float(heading_score)
+        enriched["context_score"] = float(context_score)
+        enriched["hybrid_score"] = float(0.55 * self_score + 0.30 * heading_score + 0.15 * context_score + boost)
         ranked.append(enriched)
 
-    ranked.sort(key=lambda x: (float(x.get("rrf_score", 0.0)), float(x.get("dense_score", 0.0))), reverse=True)
+    ranked.sort(
+        key=lambda x: (
+            float(x.get("hybrid_score", 0.0)),
+            float(x.get("self_score", 0.0)),
+            float(x.get("heading_score", 0.0)),
+            float(x.get("context_score", 0.0)),
+        ),
+        reverse=True,
+    )
     return ranked
 
 
-def _build_doc_passages(
-    question: str,
-    graph: Dict[str, Any],
-    doc_info: Dict[str, Any],
-    *,
-    question_vec: Optional[List[float]] = None,
-) -> List[Dict[str, Any]]:
-    candidates = _build_candidate_passages_for_doc(question, graph, doc_info)
-    ranked = _rank_passages_rrf(question, candidates, question_vec=question_vec)
-    out = ranked[:_PASSAGES_PER_DOC]
-    _build_shared_local_fields(out, doc_info)
-    for idx, item in enumerate(out, start=1):
-        item["doc_local_rank"] = idx
-        item.pop("_raw_context", None)
+# =========================
+# Passage builders
+# =========================
+
+def _article_bundle_title(doc_info: Dict[str, Any], article: str, node_idx: Dict[str, Dict[str, Any]]) -> str:
+    bundle_id = str((doc_info.get("article_to_bundle_id") or {}).get(article) or "")
+    if not bundle_id:
+        return article
+    md = dict((node_idx.get(bundle_id) or {}).get("metadata") or {})
+    return _path_label(md) or article
+
+
+def _context_text_for_node(node: Dict[str, Any], doc_info: Dict[str, Any], graph: Dict[str, Any]) -> str:
+    md = dict(node.get("metadata") or {})
+    node_idx = _node_index(graph)
+    parts: List[str] = []
+
+    article = str(md.get("article") or "").strip()
+    if article:
+        article_title = _article_bundle_title(doc_info, article, node_idx)
+        if article_title:
+            parts.append(f"[Neo cha]\n{article_title}")
+
+    child_ids = [str(x) for x in (md.get("children_ids") or []) if str(x)]
+    child_titles: List[str] = []
+    for cid in child_ids[:2]:
+        child_md = dict((node_idx.get(cid) or {}).get("metadata") or {})
+        title = _path_label(child_md)
+        if title:
+            child_titles.append(title)
+    if child_titles:
+        parts.append("[Neo con]\n" + "\n".join(child_titles))
+    return "\n\n".join(parts).strip()
+
+
+def _build_passage(node: Dict[str, Any], doc_info: Dict[str, Any], graph: Dict[str, Any]) -> Dict[str, Any]:
+    md = dict(node.get("metadata") or {})
+    artifact = _artifact_type(node)
+    doc_title = _norm_space(str(doc_info.get("law_name") or md.get("official_title") or md.get("law_name") or doc_info.get("doc_key") or ""))
+    self_text = _norm_space(str(node.get("text") or ""))
+    heading_text = _norm_space("\n".join(x for x in [str(md.get("path_title") or ""), str(md.get("heading_title") or ""), str(md.get("article") or ""), str(md.get("clause") or ""), str(md.get("point") or "")] if _norm_space(x)))
+    context_text = _context_text_for_node(node, doc_info, graph)
+    local_blocks = []
+    if self_text:
+        label = "Chính node" if artifact != "article_bundle" else "Nội dung điều"
+        local_blocks.append(f"[{label}]\n{self_text}")
+    if context_text:
+        local_blocks.append(context_text)
+    local_text = "\n\n".join(local_blocks)
+    shared_text = f"[Văn bản] {doc_title}" if doc_title else ""
+
+    if artifact == "article_bundle":
+        rerank_label = "Nội dung điều"
+    elif artifact == "doc_sketch":
+        rerank_label = "Tóm tắt cấu trúc"
+    else:
+        rerank_label = "Chính node"
+
+    rerank_text_short = "\n\n".join(
+        part for part in [
+            f"[Văn bản] {doc_title}" if doc_title else "",
+            f"[Vị trí] {_path_label(md)} | artifact={artifact or _node_type(node) or '-'}",
+            f"[{rerank_label}]\n{_short(self_text, limit=1500)}" if self_text else "",
+            context_text and _short(context_text, limit=280),
+        ] if _norm_space(part)
+    )
+
+    retrieval_text = "\n\n".join(
+        part for part in [
+            f"[Văn bản] {doc_title}" if doc_title else "",
+            f"[Heading]\n{heading_text}" if heading_text else "",
+            f"[Nội dung]\n{self_text}" if self_text else "",
+            context_text,
+        ] if _norm_space(part)
+    )
+
+    return {
+        "node_id": str(node.get("node_id") or ""),
+        "text": self_text,
+        "snippet": _short(self_text, limit=700),
+        "bundle_text": retrieval_text,
+        "retrieval_text": retrieval_text,
+        "rerank_text": rerank_text_short,
+        "rerank_text_short": rerank_text_short,
+        "self_retrieval_text": self_text,
+        "heading_text": heading_text,
+        "context_text": context_text,
+        "shared_text": shared_text,
+        "local_text": local_text,
+        "metadata": {
+            **md,
+            "doc_key": doc_info.get("doc_key"),
+            "law_name": doc_info.get("law_name") or md.get("law_name"),
+            "law_type": doc_info.get("law_type") or md.get("law_type"),
+            "source": doc_info.get("source") or md.get("source"),
+        },
+        "doc_key": str(doc_info.get("doc_key") or ""),
+        "doc_score": float(doc_info.get("rrf_score", 0.0) or 0.0),
+    }
+
+
+def _build_doc_candidates(doc_info: Dict[str, Any], graph: Dict[str, Any], *, include_doc_sketch: bool = False) -> List[Dict[str, Any]]:
+    node_idx = _node_index(graph)
+    ids: List[str] = []
+    if include_doc_sketch and doc_info.get("doc_sketch_node_id"):
+        ids.append(str(doc_info.get("doc_sketch_node_id")))
+    ids.extend(doc_info.get("article_bundle_ids") or [])
+    ids.extend(doc_info.get("evidence_ids") or [])
+
+    out: List[Dict[str, Any]] = []
+    seen: Set[str] = set()
+    for nid in ids:
+        if nid in seen or nid not in node_idx:
+            continue
+        seen.add(nid)
+        out.append(_build_passage(node_idx[nid], doc_info, graph))
     return out
 
+
+def _article_bundle_passage(doc_info: Dict[str, Any], article: str, graph: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    node_idx = _node_index(graph)
+    bundle_id = str((doc_info.get("article_to_bundle_id") or {}).get(article) or "")
+    if not bundle_id or bundle_id not in node_idx:
+        return None
+    return _build_passage(node_idx[bundle_id], doc_info, graph)
+
+
+def _same_article_passages(doc_info: Dict[str, Any], article: str, graph: Dict[str, Any]) -> List[Dict[str, Any]]:
+    node_idx = _node_index(graph)
+    ids = list((doc_info.get("article_to_evidence_ids") or {}).get(article) or [])
+    out: List[Dict[str, Any]] = []
+    for nid in ids:
+        node = node_idx.get(str(nid))
+        if not node:
+            continue
+        out.append(_build_passage(node, doc_info, graph))
+    return out
+
+
+def _find_doc_info(doc_groups: List[Dict[str, Any]], doc_key: str) -> Optional[Dict[str, Any]]:
+    for doc in doc_groups:
+        if str(doc.get("doc_key") or "") == str(doc_key or ""):
+            return doc
+    return None
+
+
+# =========================
+# Route-specific retrieval
+# =========================
+
+def _heading_list_route(question: str, graph: Dict[str, Any], doc_candidates: List[Dict[str, Any]], query_profile: Dict[str, Any], question_vec: List[float], final_top_k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    article_candidates: List[Dict[str, Any]] = []
+    for doc in doc_candidates:
+        for node_id in doc.get("article_bundle_ids") or []:
+            node = _node_index(graph).get(str(node_id))
+            if node:
+                article_candidates.append(_build_passage(node, doc, graph))
+
+    ranked_articles = _rank_passages_multifield(question, article_candidates, question_vec=question_vec, query_profile=query_profile)
+    if not ranked_articles:
+        return [], []
+
+    top_article = ranked_articles[0]
+    md = dict(top_article.get("metadata") or {})
+    doc_info = _find_doc_info(doc_candidates, str(top_article.get("doc_key") or ""))
+    article = str(md.get("article") or "").strip()
+
+    final_passages: List[Dict[str, Any]] = [top_article]
+    if doc_info and article:
+        for p in _same_article_passages(doc_info, article, graph):
+            if str(p.get("node_id") or "") == str(top_article.get("node_id") or ""):
+                continue
+            final_passages.append(p)
+
+    seen: Set[str] = set()
+    deduped: List[Dict[str, Any]] = []
+    for item in final_passages:
+        nid = str(item.get("node_id") or "")
+        if nid in seen:
+            continue
+        seen.add(nid)
+        deduped.append(item)
+    return ranked_articles, deduped[:final_top_k]
+
+
+def _version_change_route(question: str, graph: Dict[str, Any], doc_candidates: List[Dict[str, Any]], query_profile: Dict[str, Any], question_vec: List[float], cross_top_k: int, final_top_k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    change_terms = [str(x).lower() for x in (query_profile.get("change_terms") or [])]
+    candidates: List[Dict[str, Any]] = []
+    for doc in doc_candidates:
+        for p in _build_doc_candidates(doc, graph):
+            text = (_norm_space(str(p.get("self_retrieval_text") or "")).lower() + " " + _norm_space(str(p.get("heading_text") or "")).lower())
+            if any(term in text for term in change_terms):
+                candidates.append(p)
+    if not candidates:
+        for doc in doc_candidates:
+            candidates.extend(_build_doc_candidates(doc, graph))
+    ranked = _rank_passages_multifield(question, candidates, question_vec=question_vec, query_profile=query_profile)
+    reranked = cross_rerank(question, ranked[:max(cross_top_k, 1)], top_n=min(max(cross_top_k, 1), len(ranked)), query_profile=query_profile)
+    return ranked, reranked[:final_top_k]
+
+
+def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Dict[str, Any]], query_profile: Dict[str, Any], question_vec: List[float], cross_top_k: int, final_top_k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    filters = query_profile.get("filters") or {}
+    want_article = _norm_space(str(filters.get("article") or ""))
+    want_clause = _norm_space(str(filters.get("clause") or ""))
+    want_point = _norm_space(str(filters.get("point") or ""))
+
+    candidates: List[Dict[str, Any]] = []
+    for doc in doc_candidates:
+        for p in _build_doc_candidates(doc, graph):
+            md = dict(p.get("metadata") or {})
+            artifact = str(md.get("artifact_type") or "")
+            if want_article:
+                article = _norm_space(str(md.get("article") or ""))
+                if artifact == "doc_sketch":
+                    continue
+                if want_clause or want_point:
+                    if article.lower() != want_article.lower():
+                        continue
+                else:
+                    if article.lower() != want_article.lower() and artifact != "article_bundle":
+                        continue
+            if want_clause and _norm_space(str(md.get("clause") or "")).lower() != want_clause.lower():
+                continue
+            if want_point and _norm_space(str(md.get("point") or "")).lower() != want_point.lower():
+                continue
+            candidates.append(p)
+
+    if not candidates:
+        for doc in doc_candidates:
+            candidates.extend(_build_doc_candidates(doc, graph))
+
+    ranked = _rank_passages_multifield(question, candidates, question_vec=question_vec, query_profile=query_profile)
+    reranked = cross_rerank(question, ranked[:max(cross_top_k, 1)], top_n=min(max(cross_top_k, 1), len(ranked)), query_profile=query_profile)
+
+    route = str(query_profile.get("route") or "")
+    if reranked and route in {"direct_reference", "condition_circumstance", "factoid", "document_focus"}:
+        top = reranked[0]
+        md = dict(top.get("metadata") or {})
+        article = str(md.get("article") or "").strip()
+        artifact = str(md.get("artifact_type") or "")
+        doc_info = _find_doc_info(doc_candidates, str(top.get("doc_key") or ""))
+        extras: List[Dict[str, Any]] = []
+        if doc_info and article and artifact != "article_bundle":
+            bundle = _article_bundle_passage(doc_info, article, graph)
+            if bundle:
+                extras.append(bundle)
+            if route == "condition_circumstance" and query_profile.get("wants_list_answer"):
+                extras.extend(_same_article_passages(doc_info, article, graph))
+        merged = []
+        seen: Set[str] = set()
+        for item in reranked + extras:
+            nid = str(item.get("node_id") or "")
+            if nid in seen:
+                continue
+            seen.add(nid)
+            merged.append(item)
+        reranked = merged
+
+    return ranked, reranked[:final_top_k]
+
+
+# =========================
+# Main public API
+# =========================
 
 def retrieve_with_graph(
     question: str,
@@ -824,74 +742,82 @@ def retrieve_with_graph(
     final_top_k: Optional[int] = None,
     cross_top_k: Optional[int] = None,
 ) -> Dict[str, Any]:
-    _ = filters
     _ = qdrant_top_k
     _ = graph_hops
     _ = max_graph_nodes
 
     question = _norm_space(question)
+    query_profile = infer_query_profile(question)
+    merged_filters = dict(query_profile.get("filters") or {})
+    for k, v in (filters or {}).items():
+        if v not in (None, ""):
+            merged_filters[k] = v
+    if merged_filters:
+        query_profile["filters"] = merged_filters
+
     question_vec = _question_embedding(question)
-    doc_candidates = rank_documents_by_summary_rrf(question, graph, top_k=_DOCUMENT_TOP_K, question_vec=question_vec)
+    doc_candidates = rank_documents_by_sketch_rrf(
+        question,
+        graph,
+        top_k=_DOCUMENT_TOP_K,
+        question_vec=question_vec,
+        filters=merged_filters,
+        query_profile=query_profile,
+    )
+
+    final_limit = max(1, int(final_top_k or _FINAL_TOP_K))
+    cross_limit = max(1, int(cross_top_k or (_PASSAGES_PER_DOC * max(1, len(doc_candidates)))))
+
+    route = str(query_profile.get("route") or "factoid")
+    if route == "heading_list":
+        candidate_pool, final_passages = _heading_list_route(question, graph, doc_candidates, query_profile, question_vec, final_limit)
+        pipeline = "doc_sketch_rrf -> article_bundle_rank -> expand_same_article -> topk"
+    elif route == "version_change":
+        candidate_pool, final_passages = _version_change_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
+        pipeline = "doc_sketch_rrf -> change_candidates -> multifield_hybrid -> cross_rerank -> topk"
+    else:
+        candidate_pool, final_passages = _generic_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
+        pipeline = "doc_sketch_rrf -> top_docs -> provision/article candidates -> multifield_hybrid -> cross_rerank -> completion -> topk"
+
+    for idx, passage in enumerate(final_passages, start=1):
+        passage["rank"] = idx
+        passage["final_score"] = float(
+            passage.get("cross_score", passage.get("hybrid_score", 0.0)) or 0.0
+        )
 
     doc_groups: List[Dict[str, Any]] = []
-    candidate_pool: List[Dict[str, Any]] = []
     for doc in doc_candidates:
-        passages = _build_doc_passages(question, graph, doc, question_vec=question_vec)
+        items = [p for p in final_passages if str(p.get("doc_key") or "") == str(doc.get("doc_key") or "")]
         doc_groups.append(
             {
                 "doc_key": doc.get("doc_key"),
                 "doc_score": float(doc.get("rrf_score", 0.0) or 0.0),
                 "law_name": doc.get("law_name"),
                 "source": doc.get("source"),
-                "items": passages,
-                "doc_summary": doc.get("doc_summary"),
+                "items": items,
+                "doc_sketch": doc.get("doc_sketch"),
             }
         )
-        candidate_pool.extend(passages)
-
-    cross_limit = len(candidate_pool) if cross_top_k is None else max(0, min(int(cross_top_k), len(candidate_pool)))
-    reranked_pool = cross_rerank(question=question, passages=candidate_pool, top_n=cross_limit) if cross_limit > 0 else []
-
-    if cross_limit < len(candidate_pool):
-        used = {str(item.get("node_id") or "") for item in reranked_pool}
-        remainder = [item for item in candidate_pool if str(item.get("node_id") or "") not in used]
-        reranked_pool.extend(remainder)
-
-    reranked_pool.sort(
-        key=lambda x: (
-            float(x.get("cross_score", 0.0) or 0.0),
-            float(x.get("hybrid_score", 0.0) or 0.0),
-            float(x.get("doc_score", 0.0) or 0.0),
-        ),
-        reverse=True,
-    )
-
-    final_limit = max(1, int(final_top_k or _FINAL_TOP_K))
-    final_passages = reranked_pool[:final_limit]
-    for idx, passage in enumerate(final_passages, start=1):
-        passage["rank"] = idx
-        passage["final_score"] = float(passage.get("cross_score", 0.0) or 0.0)
-        passage.pop("_raw_context", None)
-
-    for item in reranked_pool[final_limit:]:
-        item.pop("_raw_context", None)
 
     return {
         "question": question,
-        "mode": "doc_summary_rrf_passage_rrf",
-        "filters": {},
+        "mode": f"intent_route::{route}",
+        "filters": merged_filters,
         "qdrant_top_k": None,
         "final_top_k": final_limit,
         "cross_top_k": cross_limit,
         "seed_candidates": doc_candidates,
         "doc_groups": doc_groups,
-        "candidate_pool": reranked_pool,
+        "candidate_pool": candidate_pool,
         "passages": final_passages,
         "query_profile": {
-            "pipeline": "doc_summary_rrf -> top5_docs -> joined_summary_passages -> top5_per_doc_rrf -> cross_rerank -> top10",
+            "pipeline": pipeline,
+            "route": route,
             "document_top_k": _DOCUMENT_TOP_K,
             "passages_per_doc": _PASSAGES_PER_DOC,
             "uses_qdrant": False,
-            "uses_graph_summary_nodes": True,
+            "uses_graph_summary_nodes": False,
+            "intent_terms": query_profile.get("intent_terms") or [],
+            "filters": merged_filters,
         },
     }

@@ -31,24 +31,23 @@ def _build_retrieval_text(chunk: Dict[str, Any], merged_meta: Dict[str, Any]) ->
     if explicit:
         return explicit
 
+    artifact = str(merged_meta.get("artifact_type") or "evidence")
+    title = _norm_space(str(merged_meta.get("official_title") or merged_meta.get("law_name") or ""))
+    path_title = _norm_space(str(merged_meta.get("path_title") or merged_meta.get("title") or ""))
+    text = _norm_space(str(chunk.get("text") or ""))
+
     parts: List[str] = []
-    for key in [
-        "doc_type",
-        "official_title",
-        "issuing_agency",
-        "doc_number",
-        "lead_block",
-        "path_title",
-        "node_type",
-        "article",
-        "clause",
-        "point",
-    ]:
-        value = merged_meta.get(key)
-        if value not in (None, ""):
-            parts.append(str(value))
-    parts.append(str(chunk.get("text") or ""))
-    return "\n".join(_norm_space(x) for x in parts if _norm_space(str(x))).strip()
+    if title:
+        parts.append(f"Văn bản: {title}")
+    if path_title:
+        parts.append(f"Vị trí: {path_title}")
+    if artifact == "doc_sketch":
+        parts.append(f"Tóm tắt cấu trúc: {text}")
+    elif artifact == "article_bundle":
+        parts.append(f"Nội dung điều: {text}")
+    else:
+        parts.append(f"Nội dung: {text}")
+    return "\n".join(p for p in parts if _norm_space(p)).strip()
 
 
 def upsert_chunks(
@@ -78,6 +77,8 @@ def upsert_chunks(
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
 
         retrieval_text = _build_retrieval_text(chunk, merged_meta)
+        rerank_text = _norm_space(str(chunk.get("rerank_text") or retrieval_text))
+
         try:
             vector = embeddings.embed_query(retrieval_text)
         except Exception as exc:
@@ -88,7 +89,7 @@ def upsert_chunks(
             "text": text,
             "snippet": str(chunk.get("snippet") or text[:600]),
             "retrieval_text": retrieval_text,
-            "rerank_text": str(chunk.get("rerank_text") or retrieval_text),
+            "rerank_text": rerank_text,
             "metadata": merged_meta,
             **merged_meta,
         }
@@ -108,42 +109,24 @@ def ingest_document(text: str, *, fallback_doc_name: str = "") -> Dict[str, Any]
 
     graph_nodes: List[Dict[str, Any]] = []
     graph_edges: List[Dict[str, Any]] = []
-    for node in parsed.nodes:
-        metadata = {
-            "doc_id": parsed.header.doc_id,
-            "law_name": parsed.header.official_title or parsed.header.file_stem,
-            "law_type": parsed.header.doc_type or "Unknown",
-            "source": parsed.header.issuing_agency or "LocalFile",
-            "year": parsed.header.year or 0,
-            "chunk_id": node.node_id,
-            "node_id": node.node_id,
-            "node_type": node.node_type,
-            "path_title": node.path_title,
-            "article": node.article,
-            "clause": node.clause,
-            "point": node.point,
-            "parent_id": node.parent_id,
-            "children_ids": list(node.children_ids),
-            "official_title": parsed.header.official_title or parsed.header.file_stem,
-            "doc_type": parsed.header.doc_type or "Unknown",
-            "lead_block": parsed.header.lead_block,
-        }
+    for chunk in chunks:
+        md = dict(chunk.get("metadata") or {})
+        node_id = str(md.get("node_id") or md.get("chunk_id") or "")
+        if not node_id:
+            continue
         graph_nodes.append(
             {
-                "node_id": node.node_id,
-                "node_type": node.node_type,
-                "text": node.text,
-                "metadata": metadata,
+                "node_id": node_id,
+                "node_type": md.get("node_type") or "text",
+                "text": str(chunk.get("text") or "").strip(),
+                "retrieval_text": str(chunk.get("retrieval_text") or chunk.get("text") or "").strip(),
+                "rerank_text": str(chunk.get("rerank_text") or chunk.get("retrieval_text") or chunk.get("text") or "").strip(),
+                "metadata": md,
             }
         )
-        if node.parent_id:
-            graph_edges.append(
-                {
-                    "source_id": node.parent_id,
-                    "target_id": node.node_id,
-                    "relation_type": "HAS_CHILD",
-                }
-            )
+        parent_id = md.get("parent_id")
+        if parent_id:
+            graph_edges.append({"source_id": str(parent_id), "target_id": node_id, "relation_type": "HAS_CHILD"})
 
     return {
         "doc_meta": parsed.header.to_metadata(),

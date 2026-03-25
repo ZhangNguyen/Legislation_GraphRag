@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Optional
 
 from sentence_transformers import CrossEncoder
 
@@ -23,17 +24,66 @@ def get_cross_encoder() -> CrossEncoder:
     return _ce
 
 
+def _norm_space(text: str) -> str:
+    return " ".join((text or "").split()).strip()
+
+
+def _normalize_rerank_text(text: str, *, max_chars: int = 1800) -> str:
+    clean = _norm_space(str(text or ""))
+    clean = re.sub(r"\[(DOC_TYPE|OFFICIAL_TITLE|ISSUING_AGENCY|LEAD_BLOCK|PATH|NODE_TYPE|CHUNK)\]\s*", " ", clean)
+    clean = re.sub(r"\s+", " ", clean).strip()
+    if len(clean) <= max_chars:
+        return clean
+    return clean[: max(0, max_chars - 3)].rstrip() + "..."
+
+
 def _build_rerank_text(passage: Dict[str, Any]) -> str:
-    return str(
-        passage.get("rerank_text")
+    raw = str(
+        passage.get("rerank_text_short")
+        or passage.get("rerank_text")
         or passage.get("retrieval_text")
         or passage.get("text")
         or passage.get("snippet")
         or ""
-    ).strip()
+    )
+    return _normalize_rerank_text(raw)
 
 
-def cross_rerank(question: str, passages: List[Dict[str, Any]], top_n: int) -> List[Dict[str, Any]]:
+def _intent_adjustment(question: str, passage: Dict[str, Any], query_profile: Optional[Dict[str, Any]]) -> float:
+    profile = query_profile or {}
+    route = str(profile.get("route") or "")
+    heading_text = _norm_space(str(passage.get("heading_text") or (passage.get("metadata") or {}).get("path_title") or "")).lower()
+    artifact_type = str((passage.get("metadata") or {}).get("artifact_type") or "")
+
+    boost = 0.0
+    primary_heading_term = str(profile.get("primary_heading_term") or "").strip().lower()
+    conflicting = [str(x).lower() for x in (profile.get("conflicting_heading_terms") or [])]
+
+    if route == "heading_list":
+        if artifact_type == "article_bundle":
+            boost += 0.12
+        if primary_heading_term and primary_heading_term in heading_text:
+            boost += 0.18
+        if conflicting and any(term in heading_text for term in conflicting) and primary_heading_term not in heading_text:
+            boost -= 0.20
+
+    if route == "version_change":
+        q = question.lower()
+        if any(term in q for term in ["bãi bỏ", "hết hiệu lực"]) and any(term in heading_text for term in ["bãi bỏ", "hết hiệu lực"]):
+            boost += 0.18
+        if any(term in q for term in ["sửa đổi", "bổ sung", "thay thế"]) and any(term in heading_text for term in ["sửa đổi", "bổ sung", "thay thế"]):
+            boost += 0.14
+
+    return boost
+
+
+def cross_rerank(
+    question: str,
+    passages: List[Dict[str, Any]],
+    top_n: int,
+    *,
+    query_profile: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
     if not passages:
         return []
 
@@ -57,8 +107,18 @@ def cross_rerank(question: str, passages: List[Dict[str, Any]], top_n: int) -> L
     scored: List[Dict[str, Any]] = []
     for score, passage in zip(scores, passages):
         item = dict(passage)
-        item["cross_score"] = float(score)
+        base = float(score)
+        adjust = _intent_adjustment(question, passage, query_profile)
+        item["cross_score_raw"] = base
+        item["cross_score"] = base + adjust
         scored.append(item)
 
-    scored.sort(key=lambda x: float(x.get("cross_score", 0.0)), reverse=True)
+    scored.sort(
+        key=lambda x: (
+            float(x.get("cross_score", 0.0)),
+            float(x.get("hybrid_score", 0.0)),
+            float(x.get("doc_score", 0.0)),
+        ),
+        reverse=True,
+    )
     return scored[:top_n]

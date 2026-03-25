@@ -251,7 +251,7 @@ def _prefix_chunks(chunks: List[Dict[str, Any]], doc_prefix: str, *, doc_meta: O
             if val:
                 md[key] = f"{doc_prefix}::{val}"
 
-        for list_key in ["children_ids", "sibling_ids"]:
+        for list_key in ["children_ids", "sibling_ids", "source_node_ids"]:
             vals = md.get(list_key)
             if isinstance(vals, list):
                 md[list_key] = [f"{doc_prefix}::{x}" for x in vals if x]
@@ -290,20 +290,24 @@ def _candidate_doc_summary(doc_id: str, graph: Dict[str, Any], doc_meta: Dict[st
         md = node.get("metadata", {}) or {}
         if str(md.get("doc_id") or "") != doc_id:
             continue
+        if str(md.get("artifact_type") or "").strip().lower() == "doc_sketch":
+            text = _norm_space(str(node.get("text") or md.get("doc_summary") or ""))
+            if text:
+                return text
         text = _norm_space(str(md.get("doc_summary") or ""))
         if text:
             return text
     parts = [
-        str(doc_meta.get("doc_type") or doc_meta.get("law_type") or "").strip(),
-        str(doc_meta.get("official_title") or doc_meta.get("law_name") or "").strip(),
+        f"Loại văn bản: {str(doc_meta.get('doc_type') or doc_meta.get('law_type') or '').strip()}" if str(doc_meta.get('doc_type') or doc_meta.get('law_type') or '').strip() else '',
+        f"Tiêu đề: {str(doc_meta.get('official_title') or doc_meta.get('law_name') or '').strip()}" if str(doc_meta.get('official_title') or doc_meta.get('law_name') or '').strip() else '',
+        f"Số văn bản: {str(doc_meta.get('doc_number') or '').strip()}" if str(doc_meta.get('doc_number') or '').strip() else '',
     ]
-    fallback = " ".join(part for part in parts if part)
-    return _norm_space(fallback)
+    return _norm_space("\n".join(part for part in parts if part))
 
 
 def _summary_text_from_evidence(node: Dict[str, Any]) -> str:
     return _norm_space(
-        str(node.get("retrieval_text") or node.get("rerank_text") or node.get("text") or "")
+        str(node.get("text") or node.get("retrieval_text") or node.get("rerank_text") or "")
     )
 
 
@@ -316,6 +320,8 @@ def _augment_graph_with_runtime_summaries(graph: Dict[str, Any]) -> Dict[str, An
     for node in existing_nodes:
         md = node.get("metadata", {}) or {}
         if md.get("artifact_type") == "summary":
+            continue
+        if str(md.get("artifact_type") or "evidence").strip().lower() != "evidence":
             continue
         doc_id = str(md.get("doc_id") or "").strip()
         if doc_id:
