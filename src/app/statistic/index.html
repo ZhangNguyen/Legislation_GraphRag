@@ -124,23 +124,7 @@
             <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
           </div>
         </div>
-        <p class="subtitle">Dùng đầy đủ API quản trị: status, reload graph, reindex/rebuild, versioning, benchmark, chat debug.</p>
-      </div>
-
-      <div class="grid grid-2">
-        <div class="card">
-          <h3>Runtime / Graph</h3>
-          <button onclick="adminStatus()">/api/admin/status</button>
-          <button class="success" onclick="adminReloadGraph()">/api/admin/reload-graph</button>
-          <button onclick="adminSaveSnapshot()">/api/admin/save-snapshot</button>
-          <button onclick="adminVersioning()">/api/admin/versioning</button>
-        </div>
-
-        <div class="card">
-          <h3>Ingest</h3>
-          <button onclick="ingestReindex()">/api/ingest/reindex</button>
-          <button class="success" onclick="ingestRebuildAll()">/api/ingest/rebuild-all</button>
-        </div>
+        <p class="subtitle">Admin dùng chat debug và benchmark để kiểm thử chất lượng phản hồi.</p>
       </div>
 
       <div class="card">
@@ -237,32 +221,6 @@
         include_debug: true,
       });
       printAdmin(data);
-    }
-
-    async function adminStatus() {
-      const res = await fetch('/api/admin/status');
-      printAdmin(await res.json());
-    }
-
-    async function adminReloadGraph() {
-      printAdmin(await postJson('/api/admin/reload-graph', {}));
-    }
-
-    async function adminVersioning() {
-      const res = await fetch('/api/admin/versioning?limit=20');
-      printAdmin(await res.json());
-    }
-
-    async function adminSaveSnapshot() {
-      printAdmin(await postJson('/api/admin/save-snapshot', {}));
-    }
-
-    async function ingestReindex() {
-      printAdmin(await postJson('/api/ingest/reindex', {}));
-    }
-
-    async function ingestRebuildAll() {
-      printAdmin(await postJson('/api/ingest/rebuild-all', {}));
     }
 
     async function runBenchmark() {
