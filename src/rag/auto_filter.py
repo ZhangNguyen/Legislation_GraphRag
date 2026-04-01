@@ -103,6 +103,17 @@ def _extract_focus_terms(q_lower: str) -> List[str]:
     return out[:10]
 
 
+def _extract_heading_query(q_lower: str) -> str:
+    cleaned = _norm_space(q_lower)
+    cleaned = re.sub(
+        r"\b(là gì|gồm những gì|gồm gì|bao gồm những gì|bao gồm gì|như thế nào)\b.*$",
+        "",
+        cleaned,
+    ).strip()
+    cleaned = re.sub(r"^(theo|về)\s+", "", cleaned).strip()
+    return cleaned[:180]
+
+
 CONFLICTING_HEADING_TERMS = {
     "nguyên tắc": ["phương thức", "trách nhiệm", "điều kiện", "thời hạn", "đối tượng áp dụng"],
     "phương thức": ["nguyên tắc", "trách nhiệm", "điều kiện", "thời hạn"],
@@ -177,18 +188,11 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
     )
 
     explicit_ref = any(k in filters for k in ["article", "clause", "point"])
+    reference_mode = "hard" if explicit_ref else "soft"
     has_doc_number = "doc_number" in filters
     has_section_reference = bool(filters.get("section_type") and filters.get("section_number"))
-    has_implicit_structure_hint = any(
-        phrase in q_lower
-        for phrase in [
-            "yêu cầu chung",
-            "nhiệm vụ",
-            "nội dung chính",
-            "quy định gì",
-            "bao gồm",
-        ]
-    )
+    heading_query = _extract_heading_query(q_lower)
+    has_heading_query = bool(heading_query) and not explicit_ref and not has_doc_number
 
     if change_terms:
         route = "version_change"
@@ -202,7 +206,7 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
         route = "heading_list"
     elif has_section_reference:
         route = "heading_list"
-    elif has_implicit_structure_hint:
+    elif has_heading_query and any(x in q_lower for x in ["là gì", "gồm", "bao gồm", "như thế nào"]):
         route = "heading_list"
     elif condition_terms:
         route = "condition_circumstance"
@@ -239,11 +243,13 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
         "primary_heading_term": primary_heading_term,
         "conflicting_heading_terms": conflicting,
         "explicit_reference": explicit_ref,
+        "reference_mode": reference_mode,
         "has_doc_number": has_doc_number,
         "prefers_article_bundle": route in {"heading_list", "version_change"} or (explicit_ref and "clause" not in filters and "point" not in filters),
         "wants_list_answer": bool(list_terms or route == "heading_list"),
         "asks_responsibility": asks_responsibility,
         "section_query": section_query,
         "section_title_hint": section_title_hint,
+        "heading_query": heading_query,
         "focus_terms": focus_terms,
     }

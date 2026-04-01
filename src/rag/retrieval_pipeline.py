@@ -641,7 +641,9 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
     self_text = _norm_space(str(passage.get("self_retrieval_text") or "")).lower()
     section_query = _norm_space(str(profile.get("section_query") or "")).lower()
     section_title_hint = _norm_space(str(profile.get("section_title_hint") or "")).lower()
+    heading_query = _norm_space(str(profile.get("heading_query") or "")).lower()
     focus_terms = [str(x).lower().strip() for x in (profile.get("focus_terms") or []) if str(x).strip()]
+    ref_mode = str(profile.get("reference_mode") or "soft").lower()
     boost = 0.0
 
     if route == "heading_list":
@@ -669,6 +671,15 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
             boost += 0.18
         if filters.get("point") and _norm_space(str(filters.get("point"))).lower() == _norm_space(str(md.get("point") or "")).lower():
             boost += 0.20
+    else:
+        filters = profile.get("filters") or {}
+        soft_mul = 1.0 if ref_mode == "hard" else 0.55
+        if filters.get("article") and _norm_space(str(filters.get("article"))).lower() == _norm_space(str(md.get("article") or "")).lower():
+            boost += 0.08 * soft_mul
+        if filters.get("clause") and _norm_space(str(filters.get("clause"))).lower() == _norm_space(str(md.get("clause") or "")).lower():
+            boost += 0.10 * soft_mul
+        if filters.get("point") and _norm_space(str(filters.get("point"))).lower() == _norm_space(str(md.get("point") or "")).lower():
+            boost += 0.12 * soft_mul
 
     if route == "condition_circumstance":
         if any(term in self_text for term in ["trường hợp", "khi", "nếu"]):
@@ -678,6 +689,8 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
         boost += 0.30
     if section_title_hint and (section_title_hint in heading or section_title_hint in self_text):
         boost += 0.20
+    if heading_query and heading_query in heading:
+        boost += 0.30
     if focus_terms:
         haystack = f"{heading} {self_text}"
         hits = sum(1 for term in focus_terms if term and term in haystack)
@@ -1001,18 +1014,20 @@ def _version_change_route(question: str, graph: Dict[str, Any], doc_candidates: 
 
 def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Dict[str, Any]], query_profile: Dict[str, Any], question_vec: List[float], cross_top_k: int, final_top_k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     filters = query_profile.get("filters") or {}
+    hard_reference = str(query_profile.get("reference_mode") or "soft").lower() == "hard"
     want_article = _norm_space(str(filters.get("article") or ""))
     want_clause = _norm_space(str(filters.get("clause") or ""))
     want_point = _norm_space(str(filters.get("point") or ""))
     section_query = _norm_space(str(query_profile.get("section_query") or "")).lower()
     section_title_hint = _norm_space(str(query_profile.get("section_title_hint") or "")).lower()
+    heading_query = _norm_space(str(query_profile.get("heading_query") or "")).lower()
 
     candidates: List[Dict[str, Any]] = []
     for doc in doc_candidates:
         for p in _build_doc_candidates(doc, graph):
             md = dict(p.get("metadata") or {})
             artifact = str(md.get("artifact_type") or "")
-            if want_article:
+            if hard_reference and want_article:
                 article = _norm_space(str(md.get("article") or ""))
                 if artifact == "doc_sketch":
                     continue
@@ -1022,14 +1037,18 @@ def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Di
                 else:
                     if article.lower() != want_article.lower() and artifact != "article_bundle":
                         continue
-            if want_clause and _norm_space(str(md.get("clause") or "")).lower() != want_clause.lower():
+            if hard_reference and want_clause and _norm_space(str(md.get("clause") or "")).lower() != want_clause.lower():
                 continue
-            if want_point and _norm_space(str(md.get("point") or "")).lower() != want_point.lower():
+            if hard_reference and want_point and _norm_space(str(md.get("point") or "")).lower() != want_point.lower():
                 continue
             if section_query:
                 heading = _norm_space(str(p.get("heading_text") or "")).lower()
                 local = _norm_space(str(p.get("self_retrieval_text") or "")).lower()
                 if section_query not in heading and (not section_title_hint or section_title_hint not in heading + " " + local):
+                    continue
+            if heading_query:
+                heading = _norm_space(str(p.get("heading_text") or "")).lower()
+                if heading_query not in heading and str(md.get("artifact_type") or "") == "doc_sketch":
                     continue
             candidates.append(p)
 

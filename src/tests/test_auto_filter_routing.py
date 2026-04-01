@@ -18,6 +18,7 @@ def test_generic_condition_keywords_do_not_overtrigger_route() -> None:
 def test_section_reference_prefers_heading_list_and_extracts_section() -> None:
     profile = infer_query_profile("Mục 1 yêu cầu chung của chính phủ về bảo đảm an toàn giao thông là gì?")
     assert profile["route"] == "heading_list"
+    assert profile["reference_mode"] == "soft"
     assert profile["section_query"] == "Mục 1"
     assert "yêu cầu chung" in profile["section_title_hint"]
 
@@ -25,5 +26,13 @@ def test_section_reference_prefers_heading_list_and_extracts_section() -> None:
 def test_implicit_structure_query_without_dieu_khoan_still_routes_heading_list() -> None:
     profile = infer_query_profile("Yêu cầu chung của Chính phủ về bảo đảm an toàn giao thông trong ngày bầu cử là gì?")
     assert profile["route"] == "heading_list"
+    assert profile["reference_mode"] == "soft"
+    assert "yêu cầu chung" in profile["heading_query"]
     assert "giao" in profile["focus_terms"]
     assert "toàn" in profile["focus_terms"]
+
+
+def test_explicit_article_reference_sets_hard_reference_mode() -> None:
+    profile = infer_query_profile("Điều 12 khoản 3 quy định gì?")
+    assert profile["route"] == "direct_reference"
+    assert profile["reference_mode"] == "hard"
