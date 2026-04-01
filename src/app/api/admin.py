@@ -6,11 +6,9 @@ from fastapi import APIRouter, Query
 
 from src.app.runtime import (
     build_runtime_graph,
-    ensure_runtime_graph,
     get_runtime_status,
     save_current_runtime_graph_snapshot,
 )
-from src.rag.legal_versioning import summarize_versioning
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -30,16 +28,6 @@ def reload_graph(
         "graph_nodes": len(graph.get("nodes", [])),
         "graph_edges": len(graph.get("edges", [])),
         "status": get_runtime_status(),
-    }
-
-
-@router.get("/versioning")
-def versioning_preview(limit: int = 20) -> Dict[str, Any]:
-    graph = ensure_runtime_graph()
-    rows = summarize_versioning(graph)
-    return {
-        "count": len(rows),
-        "items": rows[:limit],
     }
 
 
