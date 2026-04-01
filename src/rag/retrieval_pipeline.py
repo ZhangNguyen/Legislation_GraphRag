@@ -961,7 +961,15 @@ def _find_doc_info(doc_groups: List[Dict[str, Any]], doc_key: str) -> Optional[D
 # Route-specific retrieval
 # =========================
 
-def _heading_list_route(question: str, graph: Dict[str, Any], doc_candidates: List[Dict[str, Any]], query_profile: Dict[str, Any], question_vec: List[float], final_top_k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def _heading_list_route(
+    question: str,
+    graph: Dict[str, Any],
+    doc_candidates: List[Dict[str, Any]],
+    query_profile: Dict[str, Any],
+    question_vec: List[float],
+    final_top_k: int,
+    cross_top_k: int,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     article_candidates: List[Dict[str, Any]] = []
     for doc in doc_candidates:
         for node_id in doc.get("article_bundle_ids") or []:
@@ -971,7 +979,22 @@ def _heading_list_route(question: str, graph: Dict[str, Any], doc_candidates: Li
 
     ranked_articles = _rank_passages_multifield(question, article_candidates, question_vec=question_vec, query_profile=query_profile)
     if not ranked_articles:
-        return [], []
+        fallback_candidates: List[Dict[str, Any]] = []
+        for doc in doc_candidates:
+            fallback_candidates.extend(_build_doc_candidates(doc, graph))
+        fallback_ranked = _rank_passages_multifield(
+            question,
+            fallback_candidates,
+            question_vec=question_vec,
+            query_profile=query_profile,
+        )
+        fallback_reranked = cross_rerank(
+            question,
+            fallback_ranked[:max(cross_top_k, 1)],
+            top_n=min(max(cross_top_k, 1), len(fallback_ranked)),
+            query_profile=query_profile,
+        )
+        return fallback_ranked, fallback_reranked[:final_top_k]
 
     top_article = ranked_articles[0]
     md = dict(top_article.get("metadata") or {})
@@ -1135,7 +1158,15 @@ def retrieve_with_graph(
         query_profile["auto_route_reason"] = "heading_overlap"
 
     if route == "heading_list":
-        candidate_pool, final_passages = _heading_list_route(question, graph, doc_candidates, query_profile, question_vec, final_limit)
+        candidate_pool, final_passages = _heading_list_route(
+            question,
+            graph,
+            doc_candidates,
+            query_profile,
+            question_vec,
+            final_limit,
+            cross_limit,
+        )
         pipeline = f"document_seed[{doc_seed_stage}] -> article_bundle_rank -> expand_same_article -> topk"
     elif route == "version_change":
         candidate_pool, final_passages = _version_change_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
