@@ -112,6 +112,37 @@ def _path_label(md: Dict[str, Any]) -> str:
     return "-"
 
 
+def _term_hits(text: str, terms: List[str]) -> int:
+    hay = _norm_space(text).lower()
+    if not hay or not terms:
+        return 0
+    return sum(1 for t in terms if t and t in hay)
+
+
+def _is_admin_recipient_bullet(passage: Dict[str, Any]) -> bool:
+    md = dict(passage.get("metadata") or {})
+    node_type = str(md.get("node_type") or "").strip().lower()
+    path_title = _norm_space(str(md.get("path_title") or "")).lower()
+    text = _norm_space(str(passage.get("self_retrieval_text") or passage.get("text") or ""))
+    low = text.lower()
+    if node_type != "bullet" and "bullet" not in path_title:
+        return False
+    if len(text) > 120:
+        return False
+    if not text.endswith(";"):
+        return False
+    return any(
+        kw in low for kw in [
+            "thủ tướng",
+            "văn phòng chính phủ",
+            "chủ tịch ủy ban",
+            "các cục",
+            "các tổng công ty",
+            "các hãng",
+        ]
+    )
+
+
 def _first_sentences(text: str, *, max_sentences: int = 2, max_chars: int = 420) -> str:
     clean = _norm_space(text)
     if not clean:
@@ -982,6 +1013,24 @@ def _heading_list_route(
         fallback_candidates: List[Dict[str, Any]] = []
         for doc in doc_candidates:
             fallback_candidates.extend(_build_doc_candidates(doc, graph))
+        focus_terms = [str(x).lower().strip() for x in (query_profile.get("focus_terms") or []) if str(x).strip()]
+        heading_query = _norm_space(str(query_profile.get("heading_query") or "")).lower()
+        section_query = _norm_space(str(query_profile.get("section_query") or "")).lower()
+        section_title_hint = _norm_space(str(query_profile.get("section_title_hint") or "")).lower()
+        filtered_candidates: List[Dict[str, Any]] = []
+        for p in fallback_candidates:
+            heading = _norm_space(str(p.get("heading_text") or "")).lower()
+            local = _norm_space(str(p.get("self_retrieval_text") or p.get("text") or "")).lower()
+            hits = max(_term_hits(heading, focus_terms), _term_hits(local, focus_terms))
+            if _is_admin_recipient_bullet(p) and hits < 2:
+                continue
+            if section_query and section_query not in heading and section_title_hint and section_title_hint not in f"{heading} {local}" and hits < 2:
+                continue
+            if heading_query and heading_query not in heading and hits < 2 and _is_admin_recipient_bullet(p):
+                continue
+            filtered_candidates.append(p)
+        if filtered_candidates:
+            fallback_candidates = filtered_candidates
         fallback_ranked = _rank_passages_multifield(
             question,
             fallback_candidates,
