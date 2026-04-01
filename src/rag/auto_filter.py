@@ -22,6 +22,9 @@ LAW_TYPE_PATTERNS = {
 }
 
 HEADING_TERMS = [
+    "yêu cầu chung",
+    "nhiệm vụ",
+    "nội dung",
     "nguyên tắc",
     "phạm vi",
     "đối tượng áp dụng",
