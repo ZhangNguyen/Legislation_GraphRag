@@ -774,6 +774,57 @@ def _rank_passages_multifield(
     return ranked
 
 
+def _token_overlap_ratio(question: str, heading_text: str) -> float:
+    q_tokens = {tok for tok in tokenize(question) if tok and len(tok) >= 2}
+    h_tokens = {tok for tok in tokenize(heading_text) if tok and len(tok) >= 2}
+    if not q_tokens or not h_tokens:
+        return 0.0
+    return float(len(q_tokens & h_tokens) / max(1, len(q_tokens)))
+
+
+def _should_force_heading_route(
+    question: str,
+    graph: Dict[str, Any],
+    doc_candidates: List[Dict[str, Any]],
+    query_profile: Dict[str, Any],
+    question_vec: List[float],
+) -> bool:
+    route = str(query_profile.get("route") or "")
+    filters = query_profile.get("filters") or {}
+    if route in {"heading_list", "version_change", "direct_reference"}:
+        return False
+    if any(filters.get(k) for k in ["article", "clause", "point"]):
+        return False
+
+    article_bundles: List[Dict[str, Any]] = []
+    for doc in doc_candidates:
+        for node_id in doc.get("article_bundle_ids") or []:
+            node = _node_index(graph).get(str(node_id))
+            if node:
+                article_bundles.append(_build_passage(node, doc, graph))
+            if len(article_bundles) >= 40:
+                break
+        if len(article_bundles) >= 40:
+            break
+
+    if not article_bundles:
+        return False
+
+    max_overlap = max(_token_overlap_ratio(question, str(p.get("heading_text") or "")) for p in article_bundles)
+    if max_overlap >= 0.35:
+        return True
+
+    ranked = _rank_passages_multifield(question, article_bundles, question_vec=question_vec, query_profile=query_profile)
+    if not ranked:
+        return False
+    top = ranked[0]
+    top_score = float(top.get("hybrid_score", 0.0) or 0.0)
+    second_score = float((ranked[1].get("hybrid_score", 0.0) if len(ranked) > 1 else 0.0) or 0.0)
+    heading_overlap = _token_overlap_ratio(question, str(top.get("heading_text") or ""))
+
+    return bool(heading_overlap >= 0.35 or (top_score >= 0.72 and (top_score - second_score) >= 0.12))
+
+
 # =========================
 # Passage builders
 # =========================
@@ -1150,6 +1201,11 @@ def retrieve_with_graph(
     cross_limit = max(1, int(cross_top_k or (_PASSAGES_PER_DOC * max(1, len(doc_candidates)))))
 
     route = str(query_profile.get("route") or "factoid")
+    if _should_force_heading_route(question, graph, doc_candidates, query_profile, question_vec):
+        route = "heading_list"
+        query_profile["route"] = "heading_list"
+        query_profile["auto_route_reason"] = "heading_overlap"
+
     if route == "heading_list":
         candidate_pool, final_passages = _heading_list_route(
             question,
