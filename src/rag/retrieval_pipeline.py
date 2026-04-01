@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from src.rag.auto_filter import infer_filters, infer_query_profile
+from src.rag.auto_filter import infer_query_profile
 from src.rag.hybrid import bm25_score, tokenize
 from src.rag.openai_clients import get_embedings
 from src.rag.rerank_cross import cross_rerank
@@ -110,6 +110,37 @@ def _path_label(md: Dict[str, Any]) -> str:
         if value is not None and str(value).strip():
             return str(value).strip()
     return "-"
+
+
+def _term_hits(text: str, terms: List[str]) -> int:
+    hay = _norm_space(text).lower()
+    if not hay or not terms:
+        return 0
+    return sum(1 for t in terms if t and t in hay)
+
+
+def _is_admin_recipient_bullet(passage: Dict[str, Any]) -> bool:
+    md = dict(passage.get("metadata") or {})
+    node_type = str(md.get("node_type") or "").strip().lower()
+    path_title = _norm_space(str(md.get("path_title") or "")).lower()
+    text = _norm_space(str(passage.get("self_retrieval_text") or passage.get("text") or ""))
+    low = text.lower()
+    if node_type != "bullet" and "bullet" not in path_title:
+        return False
+    if len(text) > 120:
+        return False
+    if not text.endswith(";"):
+        return False
+    return any(
+        kw in low for kw in [
+            "thủ tướng",
+            "văn phòng chính phủ",
+            "chủ tịch ủy ban",
+            "các cục",
+            "các tổng công ty",
+            "các hãng",
+        ]
+    )
 
 
 def _first_sentences(text: str, *, max_sentences: int = 2, max_chars: int = 420) -> str:
@@ -525,7 +556,6 @@ def _rank_documents_multifield_rrf(
     combined_embeds = _batch_embed_texts(combined_texts, cache=_DOC_EMBED_CACHE)
 
     rank_lists: List[List[str]] = []
-    scored_lists: List[Tuple[str, List[Dict[str, Any]]]] = []
     bm25_docno_items: List[Dict[str, Any]] = []
     bm25_title_items: List[Dict[str, Any]] = []
     bm25_sketch_items: List[Dict[str, Any]] = []
@@ -640,6 +670,11 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
     artifact = str(md.get("artifact_type") or "")
     heading = _norm_space(str(passage.get("heading_text") or "")).lower()
     self_text = _norm_space(str(passage.get("self_retrieval_text") or "")).lower()
+    section_query = _norm_space(str(profile.get("section_query") or "")).lower()
+    section_title_hint = _norm_space(str(profile.get("section_title_hint") or "")).lower()
+    heading_query = _norm_space(str(profile.get("heading_query") or "")).lower()
+    focus_terms = [str(x).lower().strip() for x in (profile.get("focus_terms") or []) if str(x).strip()]
+    ref_mode = str(profile.get("reference_mode") or "soft").lower()
     boost = 0.0
 
     if route == "heading_list":
@@ -667,10 +702,30 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
             boost += 0.18
         if filters.get("point") and _norm_space(str(filters.get("point"))).lower() == _norm_space(str(md.get("point") or "")).lower():
             boost += 0.20
+    else:
+        filters = profile.get("filters") or {}
+        soft_mul = 1.0 if ref_mode == "hard" else 0.55
+        if filters.get("article") and _norm_space(str(filters.get("article"))).lower() == _norm_space(str(md.get("article") or "")).lower():
+            boost += 0.08 * soft_mul
+        if filters.get("clause") and _norm_space(str(filters.get("clause"))).lower() == _norm_space(str(md.get("clause") or "")).lower():
+            boost += 0.10 * soft_mul
+        if filters.get("point") and _norm_space(str(filters.get("point"))).lower() == _norm_space(str(md.get("point") or "")).lower():
+            boost += 0.12 * soft_mul
 
     if route == "condition_circumstance":
         if any(term in self_text for term in ["trường hợp", "khi", "nếu"]):
             boost += 0.06
+
+    if section_query and section_query in heading:
+        boost += 0.30
+    if section_title_hint and (section_title_hint in heading or section_title_hint in self_text):
+        boost += 0.20
+    if heading_query and heading_query in heading:
+        boost += 0.30
+    if focus_terms:
+        haystack = f"{heading} {self_text}"
+        hits = sum(1 for term in focus_terms if term and term in haystack)
+        boost += min(0.24, 0.04 * hits)
 
     return boost
 
@@ -886,7 +941,15 @@ def _find_doc_info(doc_groups: List[Dict[str, Any]], doc_key: str) -> Optional[D
 # Route-specific retrieval
 # =========================
 
-def _heading_list_route(question: str, graph: Dict[str, Any], doc_candidates: List[Dict[str, Any]], query_profile: Dict[str, Any], question_vec: List[float], final_top_k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def _heading_list_route(
+    question: str,
+    graph: Dict[str, Any],
+    doc_candidates: List[Dict[str, Any]],
+    query_profile: Dict[str, Any],
+    question_vec: List[float],
+    final_top_k: int,
+    cross_top_k: int,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     article_candidates: List[Dict[str, Any]] = []
     for doc in doc_candidates:
         for node_id in doc.get("article_bundle_ids") or []:
@@ -896,7 +959,40 @@ def _heading_list_route(question: str, graph: Dict[str, Any], doc_candidates: Li
 
     ranked_articles = _rank_passages_multifield(question, article_candidates, question_vec=question_vec, query_profile=query_profile)
     if not ranked_articles:
-        return [], []
+        fallback_candidates: List[Dict[str, Any]] = []
+        for doc in doc_candidates:
+            fallback_candidates.extend(_build_doc_candidates(doc, graph))
+        focus_terms = [str(x).lower().strip() for x in (query_profile.get("focus_terms") or []) if str(x).strip()]
+        heading_query = _norm_space(str(query_profile.get("heading_query") or "")).lower()
+        section_query = _norm_space(str(query_profile.get("section_query") or "")).lower()
+        section_title_hint = _norm_space(str(query_profile.get("section_title_hint") or "")).lower()
+        filtered_candidates: List[Dict[str, Any]] = []
+        for p in fallback_candidates:
+            heading = _norm_space(str(p.get("heading_text") or "")).lower()
+            local = _norm_space(str(p.get("self_retrieval_text") or p.get("text") or "")).lower()
+            hits = max(_term_hits(heading, focus_terms), _term_hits(local, focus_terms))
+            if _is_admin_recipient_bullet(p) and hits < 2:
+                continue
+            if section_query and section_query not in heading and section_title_hint and section_title_hint not in f"{heading} {local}" and hits < 2:
+                continue
+            if heading_query and heading_query not in heading and hits < 2 and _is_admin_recipient_bullet(p):
+                continue
+            filtered_candidates.append(p)
+        if filtered_candidates:
+            fallback_candidates = filtered_candidates
+        fallback_ranked = _rank_passages_multifield(
+            question,
+            fallback_candidates,
+            question_vec=question_vec,
+            query_profile=query_profile,
+        )
+        fallback_reranked = cross_rerank(
+            question,
+            fallback_ranked[:max(cross_top_k, 1)],
+            top_n=min(max(cross_top_k, 1), len(fallback_ranked)),
+            query_profile=query_profile,
+        )
+        return fallback_ranked, fallback_reranked[:final_top_k]
 
     top_article = ranked_articles[0]
     md = dict(top_article.get("metadata") or {})
@@ -939,16 +1035,20 @@ def _version_change_route(question: str, graph: Dict[str, Any], doc_candidates: 
 
 def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Dict[str, Any]], query_profile: Dict[str, Any], question_vec: List[float], cross_top_k: int, final_top_k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     filters = query_profile.get("filters") or {}
+    hard_reference = str(query_profile.get("reference_mode") or "soft").lower() == "hard"
     want_article = _norm_space(str(filters.get("article") or ""))
     want_clause = _norm_space(str(filters.get("clause") or ""))
     want_point = _norm_space(str(filters.get("point") or ""))
+    section_query = _norm_space(str(query_profile.get("section_query") or "")).lower()
+    section_title_hint = _norm_space(str(query_profile.get("section_title_hint") or "")).lower()
+    heading_query = _norm_space(str(query_profile.get("heading_query") or "")).lower()
 
     candidates: List[Dict[str, Any]] = []
     for doc in doc_candidates:
         for p in _build_doc_candidates(doc, graph):
             md = dict(p.get("metadata") or {})
             artifact = str(md.get("artifact_type") or "")
-            if want_article:
+            if hard_reference and want_article:
                 article = _norm_space(str(md.get("article") or ""))
                 if artifact == "doc_sketch":
                     continue
@@ -958,10 +1058,19 @@ def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Di
                 else:
                     if article.lower() != want_article.lower() and artifact != "article_bundle":
                         continue
-            if want_clause and _norm_space(str(md.get("clause") or "")).lower() != want_clause.lower():
+            if hard_reference and want_clause and _norm_space(str(md.get("clause") or "")).lower() != want_clause.lower():
                 continue
-            if want_point and _norm_space(str(md.get("point") or "")).lower() != want_point.lower():
+            if hard_reference and want_point and _norm_space(str(md.get("point") or "")).lower() != want_point.lower():
                 continue
+            if section_query:
+                heading = _norm_space(str(p.get("heading_text") or "")).lower()
+                local = _norm_space(str(p.get("self_retrieval_text") or "")).lower()
+                if section_query not in heading and (not section_title_hint or section_title_hint not in heading + " " + local):
+                    continue
+            if heading_query:
+                heading = _norm_space(str(p.get("heading_text") or "")).lower()
+                if heading_query not in heading and str(md.get("artifact_type") or "") == "doc_sketch":
+                    continue
             candidates.append(p)
 
     if not candidates:
@@ -1042,7 +1151,15 @@ def retrieve_with_graph(
 
     route = str(query_profile.get("route") or "factoid")
     if route == "heading_list":
-        candidate_pool, final_passages = _heading_list_route(question, graph, doc_candidates, query_profile, question_vec, final_limit)
+        candidate_pool, final_passages = _heading_list_route(
+            question,
+            graph,
+            doc_candidates,
+            query_profile,
+            question_vec,
+            final_limit,
+            cross_limit,
+        )
         pipeline = f"document_seed[{doc_seed_stage}] -> article_bundle_rank -> expand_same_article -> topk"
     elif route == "version_change":
         candidate_pool, final_passages = _version_change_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
