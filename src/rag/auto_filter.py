@@ -8,6 +8,7 @@ CLAUSE_NUM_RE = re.compile(r"(?:khoản)\s*(\d+)", re.IGNORECASE)
 POINT_RE = re.compile(r"(?:điểm)\s*([a-zđ])", re.IGNORECASE)
 YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 DOC_NUMBER_RE = re.compile(r"\b\d{1,3}/\d{4}/[A-ZĐ\-]+\b", re.IGNORECASE)
+SECTION_RE = re.compile(r"\b(mục|phần|chương)\s*([ivxlcdm]+|\d+)\b", re.IGNORECASE)
 
 LAW_TYPE_PATTERNS = {
     "bộ luật": "Bộ luật",
@@ -75,6 +76,41 @@ def _contains_any(q: str, phrases: List[str]) -> List[str]:
     return [p for p in phrases if p in q]
 
 
+_FOCUS_STOPWORDS = {
+    "là", "gì", "về", "của", "cho", "trong", "theo", "để", "và", "các", "những", "được", "không",
+    "người", "dùng", "hỏi", "quy", "định", "mục", "điều", "khoản", "điểm", "ngày", "năm", "tháng",
+}
+
+
+def _extract_focus_terms(q_lower: str) -> List[str]:
+    cleaned = re.sub(r"[^0-9a-zà-ỹđ\s]", " ", q_lower)
+    cleaned = _norm_space(cleaned)
+    out: List[str] = []
+    seen = set()
+    for tok in cleaned.split():
+        token = tok.strip()
+        if len(token) < 3:
+            continue
+        if token in _FOCUS_STOPWORDS:
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out[:10]
+
+
+def _extract_heading_query(q_lower: str) -> str:
+    cleaned = _norm_space(q_lower)
+    cleaned = re.sub(
+        r"\b(là gì|gồm những gì|gồm gì|bao gồm những gì|bao gồm gì|như thế nào)\b.*$",
+        "",
+        cleaned,
+    ).strip()
+    cleaned = re.sub(r"^(theo|về)\s+", "", cleaned).strip()
+    return cleaned[:180]
+
+
 CONFLICTING_HEADING_TERMS = {
     "nguyên tắc": ["phương thức", "trách nhiệm", "điều kiện", "thời hạn", "đối tượng áp dụng"],
     "phương thức": ["nguyên tắc", "trách nhiệm", "điều kiện", "thời hạn"],
@@ -112,6 +148,11 @@ def infer_filters(question: str) -> Dict[str, Any]:
     if doc_no:
         out["doc_number"] = doc_no.group(0).upper()
 
+    section = SECTION_RE.search(q_lower)
+    if section:
+        out["section_type"] = section.group(1).capitalize()
+        out["section_number"] = section.group(2).upper()
+
     for key, value in LAW_TYPE_PATTERNS.items():
         if key in q_lower:
             out["law_type"] = value
@@ -144,7 +185,11 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
     )
 
     explicit_ref = any(k in filters for k in ["article", "clause", "point"])
+    reference_mode = "hard" if explicit_ref else "soft"
     has_doc_number = "doc_number" in filters
+    has_section_reference = bool(filters.get("section_type") and filters.get("section_number"))
+    heading_query = _extract_heading_query(q_lower)
+    has_heading_query = bool(heading_query) and not explicit_ref and not has_doc_number
 
     if change_terms:
         route = "version_change"
@@ -156,6 +201,10 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
         route = "heading_list"
     elif asks_responsibility and (list_terms or " để " in f" {q_lower} "):
         route = "heading_list"
+    elif has_section_reference:
+        route = "heading_list"
+    elif has_heading_query and any(x in q_lower for x in ["là gì", "gồm", "bao gồm", "như thế nào"]):
+        route = "heading_list"
     elif condition_terms:
         route = "condition_circumstance"
     elif has_doc_number:
@@ -165,6 +214,19 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
 
     primary_heading_term: Optional[str] = heading_terms[0] if heading_terms else None
     conflicting = CONFLICTING_HEADING_TERMS.get(primary_heading_term or "", [])
+    section_type = str(filters.get("section_type") or "").strip()
+    section_number = str(filters.get("section_number") or "").strip()
+    section_query = f"{section_type} {section_number}".strip()
+
+    section_title_hint = ""
+    if section_query:
+        lower_section = section_query.lower()
+        pos = q_lower.find(lower_section)
+        if pos >= 0:
+            tail = _norm_space(q_lower[pos + len(lower_section):])
+            tail = re.sub(r"^[:\-–\s]+", "", tail).strip()
+            section_title_hint = tail[:160]
+    focus_terms = _extract_focus_terms(q_lower)
 
     return {
         "question": q,
@@ -178,8 +240,13 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
         "primary_heading_term": primary_heading_term,
         "conflicting_heading_terms": conflicting,
         "explicit_reference": explicit_ref,
+        "reference_mode": reference_mode,
         "has_doc_number": has_doc_number,
         "prefers_article_bundle": route in {"heading_list", "version_change"} or (explicit_ref and "clause" not in filters and "point" not in filters),
         "wants_list_answer": bool(list_terms or route == "heading_list"),
         "asks_responsibility": asks_responsibility,
+        "section_query": section_query,
+        "section_title_hint": section_title_hint,
+        "heading_query": heading_query,
+        "focus_terms": focus_terms,
     }
