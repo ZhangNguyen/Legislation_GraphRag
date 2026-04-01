@@ -23,11 +23,8 @@ src/legislation_rag.egg-info/top_level.txt
 src/rag/auto_filter.py
 src/rag/bm25_corpus.py
 src/rag/chunking_legal.py
-src/rag/graph_builder.py
-src/rag/hierachical_summary.py
 src/rag/hybrid.py
 src/rag/ingestion.py
-src/rag/legal_versioning.py
 src/rag/openai_clients.py
 src/rag/qa_engine.py
 src/rag/rerank_cross.py

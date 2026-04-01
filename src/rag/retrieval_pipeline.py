@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from src.rag.auto_filter import infer_filters, infer_query_profile
+from src.rag.auto_filter import infer_query_profile
 from src.rag.hybrid import bm25_score, tokenize
 from src.rag.openai_clients import get_embedings
 from src.rag.rerank_cross import cross_rerank
@@ -525,7 +525,6 @@ def _rank_documents_multifield_rrf(
     combined_embeds = _batch_embed_texts(combined_texts, cache=_DOC_EMBED_CACHE)
 
     rank_lists: List[List[str]] = []
-    scored_lists: List[Tuple[str, List[Dict[str, Any]]]] = []
     bm25_docno_items: List[Dict[str, Any]] = []
     bm25_title_items: List[Dict[str, Any]] = []
     bm25_sketch_items: List[Dict[str, Any]] = []
