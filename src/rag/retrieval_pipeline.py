@@ -646,6 +646,8 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
         primary = str(profile.get("primary_heading_term") or "").lower()
         if artifact == "article_bundle":
             boost += 0.18
+        if artifact == "evidence" and re.search(r"(?:^|\n)\s*(?:[a-zđ]\)|\d+\.)\s+", self_text):
+            boost += 0.14
         if primary and primary in heading:
             boost += 0.20
         conflicting = [str(x).lower() for x in (profile.get("conflicting_heading_terms") or [])]
@@ -733,22 +735,37 @@ def _context_text_for_node(node: Dict[str, Any], doc_info: Dict[str, Any], graph
     md = dict(node.get("metadata") or {})
     node_idx = _node_index(graph)
     parts: List[str] = []
+    context_sentences: List[str] = []
 
     article = str(md.get("article") or "").strip()
     if article:
         article_title = _article_bundle_title(doc_info, article, node_idx)
         if article_title:
             parts.append(f"[Neo cha]\n{article_title}")
+        bundle_id = str((doc_info.get("article_to_bundle_id") or {}).get(article) or "")
+        parent_node = node_idx.get(bundle_id) if bundle_id else None
+        parent_text = _norm_space(str((parent_node or {}).get("text") or ""))
+        if parent_text:
+            context_sentences.append(_first_sentences(parent_text, max_sentences=1, max_chars=240))
 
     child_ids = [str(x) for x in (md.get("children_ids") or []) if str(x)]
     child_titles: List[str] = []
     for cid in child_ids[:2]:
-        child_md = dict((node_idx.get(cid) or {}).get("metadata") or {})
+        child_node = node_idx.get(cid) or {}
+        child_md = dict(child_node.get("metadata") or {})
         title = _path_label(child_md)
         if title:
             child_titles.append(title)
+        child_text = _norm_space(str(child_node.get("text") or ""))
+        if child_text and len(context_sentences) < 2:
+            context_sentences.append(_first_sentences(child_text, max_sentences=1, max_chars=220))
     if child_titles:
         parts.append("[Neo con]\n" + "\n".join(child_titles))
+
+    if len(context_sentences) == 1:
+        context_sentences[0] = _first_sentences(context_sentences[0], max_sentences=2, max_chars=320)
+    if context_sentences:
+        parts.append("[Ngữ cảnh cha-con]\n" + " ".join(context_sentences[:2]))
     return "\n\n".join(parts).strip()
 
 
@@ -756,6 +773,7 @@ def _build_passage(node: Dict[str, Any], doc_info: Dict[str, Any], graph: Dict[s
     md = dict(node.get("metadata") or {})
     artifact = _artifact_type(node)
     doc_title = _norm_space(str(doc_info.get("law_name") or md.get("official_title") or md.get("law_name") or doc_info.get("doc_key") or ""))
+    official_title = _norm_space(str(md.get("official_title") or doc_info.get("official_title") or doc_title))
     self_text = _norm_space(str(node.get("text") or ""))
     heading_text = _norm_space("\n".join(x for x in [str(md.get("path_title") or ""), str(md.get("heading_title") or ""), str(md.get("article") or ""), str(md.get("clause") or ""), str(md.get("point") or "")] if _norm_space(x)))
     context_text = _context_text_for_node(node, doc_info, graph)
@@ -778,6 +796,7 @@ def _build_passage(node: Dict[str, Any], doc_info: Dict[str, Any], graph: Dict[s
     rerank_text_short = "\n\n".join(
         part for part in [
             f"[Văn bản] {doc_title}" if doc_title else "",
+            f"[Official title] {official_title}" if official_title and official_title != doc_title else "",
             f"[Vị trí] {_path_label(md)} | artifact={artifact or _node_type(node) or '-'}",
             f"[{rerank_label}]\n{_short(self_text, limit=1500)}" if self_text else "",
             context_text and _short(context_text, limit=280),
@@ -964,7 +983,7 @@ def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Di
             bundle = _article_bundle_passage(doc_info, article, graph)
             if bundle:
                 extras.append(bundle)
-            if route == "condition_circumstance" and query_profile.get("wants_list_answer"):
+            if query_profile.get("wants_list_answer"):
                 extras.extend(_same_article_passages(doc_info, article, graph))
         merged = []
         seen: Set[str] = set()
