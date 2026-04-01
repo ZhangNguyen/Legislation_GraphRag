@@ -646,6 +646,8 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
         primary = str(profile.get("primary_heading_term") or "").lower()
         if artifact == "article_bundle":
             boost += 0.18
+        if artifact == "evidence" and re.search(r"(?:^|\n)\s*(?:[a-zđ]\)|\d+\.)\s+", self_text):
+            boost += 0.14
         if primary and primary in heading:
             boost += 0.20
         conflicting = [str(x).lower() for x in (profile.get("conflicting_heading_terms") or [])]
@@ -964,7 +966,7 @@ def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Di
             bundle = _article_bundle_passage(doc_info, article, graph)
             if bundle:
                 extras.append(bundle)
-            if route == "condition_circumstance" and query_profile.get("wants_list_answer"):
+            if query_profile.get("wants_list_answer"):
                 extras.extend(_same_article_passages(doc_info, article, graph))
         merged = []
         seen: Set[str] = set()

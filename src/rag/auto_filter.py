@@ -48,8 +48,6 @@ CONDITION_TERMS = [
     "khi nào",
     "điều kiện nào",
     "được phân cấp",
-    "được",
-    "phải",
     "nếu",
 ]
 
@@ -61,6 +59,11 @@ LIST_TRIGGERS = [
     "những trường hợp nào",
     "những điều kiện nào",
     "liệt kê",
+    "làm gì",
+    "phải làm gì",
+    "cần làm gì",
+    "thực hiện gì",
+    "thực hiện những gì",
 ]
 
 
@@ -126,6 +129,19 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
     change_terms = _contains_any(q_lower, CHANGE_TERMS)
     condition_terms = _contains_any(q_lower, CONDITION_TERMS)
     list_terms = _contains_any(q_lower, LIST_TRIGGERS)
+    asks_responsibility = any(
+        phrase in q_lower
+        for phrase in [
+            "ai chịu trách nhiệm",
+            "trách nhiệm của",
+            "ủy ban nhân dân",
+            "ubnd",
+            "bộ công thương",
+            "cơ quan nào",
+            "làm gì",
+            "thực hiện gì",
+        ]
+    )
 
     explicit_ref = any(k in filters for k in ["article", "clause", "point"])
     has_doc_number = "doc_number" in filters
@@ -137,6 +153,8 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
     elif heading_terms and list_terms:
         route = "heading_list"
     elif heading_terms and not condition_terms:
+        route = "heading_list"
+    elif asks_responsibility and (list_terms or " để " in f" {q_lower} "):
         route = "heading_list"
     elif condition_terms:
         route = "condition_circumstance"
@@ -163,4 +181,5 @@ def infer_query_profile(question: str) -> Dict[str, Any]:
         "has_doc_number": has_doc_number,
         "prefers_article_bundle": route in {"heading_list", "version_change"} or (explicit_ref and "clause" not in filters and "point" not in filters),
         "wants_list_answer": bool(list_terms or route == "heading_list"),
+        "asks_responsibility": asks_responsibility,
     }
