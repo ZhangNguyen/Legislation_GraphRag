@@ -639,6 +639,9 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
     artifact = str(md.get("artifact_type") or "")
     heading = _norm_space(str(passage.get("heading_text") or "")).lower()
     self_text = _norm_space(str(passage.get("self_retrieval_text") or "")).lower()
+    section_query = _norm_space(str(profile.get("section_query") or "")).lower()
+    section_title_hint = _norm_space(str(profile.get("section_title_hint") or "")).lower()
+    focus_terms = [str(x).lower().strip() for x in (profile.get("focus_terms") or []) if str(x).strip()]
     boost = 0.0
 
     if route == "heading_list":
@@ -670,6 +673,15 @@ def _passage_route_bonus(passage: Dict[str, Any], query_profile: Dict[str, Any])
     if route == "condition_circumstance":
         if any(term in self_text for term in ["trường hợp", "khi", "nếu"]):
             boost += 0.06
+
+    if section_query and section_query in heading:
+        boost += 0.30
+    if section_title_hint and (section_title_hint in heading or section_title_hint in self_text):
+        boost += 0.20
+    if focus_terms:
+        haystack = f"{heading} {self_text}"
+        hits = sum(1 for term in focus_terms if term and term in haystack)
+        boost += min(0.24, 0.04 * hits)
 
     return boost
 
@@ -716,6 +728,57 @@ def _rank_passages_multifield(
         reverse=True,
     )
     return ranked
+
+
+def _token_overlap_ratio(question: str, heading_text: str) -> float:
+    q_tokens = {tok for tok in tokenize(question) if tok and len(tok) >= 2}
+    h_tokens = {tok for tok in tokenize(heading_text) if tok and len(tok) >= 2}
+    if not q_tokens or not h_tokens:
+        return 0.0
+    return float(len(q_tokens & h_tokens) / max(1, len(q_tokens)))
+
+
+def _should_force_heading_route(
+    question: str,
+    graph: Dict[str, Any],
+    doc_candidates: List[Dict[str, Any]],
+    query_profile: Dict[str, Any],
+    question_vec: List[float],
+) -> bool:
+    route = str(query_profile.get("route") or "")
+    filters = query_profile.get("filters") or {}
+    if route in {"heading_list", "version_change", "direct_reference"}:
+        return False
+    if any(filters.get(k) for k in ["article", "clause", "point"]):
+        return False
+
+    article_bundles: List[Dict[str, Any]] = []
+    for doc in doc_candidates:
+        for node_id in doc.get("article_bundle_ids") or []:
+            node = _node_index(graph).get(str(node_id))
+            if node:
+                article_bundles.append(_build_passage(node, doc, graph))
+            if len(article_bundles) >= 40:
+                break
+        if len(article_bundles) >= 40:
+            break
+
+    if not article_bundles:
+        return False
+
+    max_overlap = max(_token_overlap_ratio(question, str(p.get("heading_text") or "")) for p in article_bundles)
+    if max_overlap >= 0.35:
+        return True
+
+    ranked = _rank_passages_multifield(question, article_bundles, question_vec=question_vec, query_profile=query_profile)
+    if not ranked:
+        return False
+    top = ranked[0]
+    top_score = float(top.get("hybrid_score", 0.0) or 0.0)
+    second_score = float((ranked[1].get("hybrid_score", 0.0) if len(ranked) > 1 else 0.0) or 0.0)
+    heading_overlap = _token_overlap_ratio(question, str(top.get("heading_text") or ""))
+
+    return bool(heading_overlap >= 0.35 or (top_score >= 0.72 and (top_score - second_score) >= 0.12))
 
 
 # =========================
@@ -941,6 +1004,8 @@ def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Di
     want_article = _norm_space(str(filters.get("article") or ""))
     want_clause = _norm_space(str(filters.get("clause") or ""))
     want_point = _norm_space(str(filters.get("point") or ""))
+    section_query = _norm_space(str(query_profile.get("section_query") or "")).lower()
+    section_title_hint = _norm_space(str(query_profile.get("section_title_hint") or "")).lower()
 
     candidates: List[Dict[str, Any]] = []
     for doc in doc_candidates:
@@ -961,6 +1026,11 @@ def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Di
                 continue
             if want_point and _norm_space(str(md.get("point") or "")).lower() != want_point.lower():
                 continue
+            if section_query:
+                heading = _norm_space(str(p.get("heading_text") or "")).lower()
+                local = _norm_space(str(p.get("self_retrieval_text") or "")).lower()
+                if section_query not in heading and (not section_title_hint or section_title_hint not in heading + " " + local):
+                    continue
             candidates.append(p)
 
     if not candidates:
@@ -1040,6 +1110,11 @@ def retrieve_with_graph(
     cross_limit = max(1, int(cross_top_k or (_PASSAGES_PER_DOC * max(1, len(doc_candidates)))))
 
     route = str(query_profile.get("route") or "factoid")
+    if _should_force_heading_route(question, graph, doc_candidates, query_profile, question_vec):
+        route = "heading_list"
+        query_profile["route"] = "heading_list"
+        query_profile["auto_route_reason"] = "heading_overlap"
+
     if route == "heading_list":
         candidate_pool, final_passages = _heading_list_route(question, graph, doc_candidates, query_profile, question_vec, final_limit)
         pipeline = f"document_seed[{doc_seed_stage}] -> article_bundle_rank -> expand_same_article -> topk"
