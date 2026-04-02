@@ -29,10 +29,10 @@ class ChatRequestModel(BaseModel):
 @router.post("")
 def chat(req: ChatRequestModel) -> Dict[str, Any]:
     logger.info("Chat request received: chars=%s include_debug=%s", len(req.question or ""), req.include_debug)
+
     t0 = time.perf_counter()
     graph = ensure_runtime_graph()
     t1 = time.perf_counter()
-    logger.info("Chat step graph_ready: %.2f ms", (t1 - t0) * 1000.0)
 
     retrieval_result = retrieve_with_graph(
         question=req.question,
@@ -45,18 +45,12 @@ def chat(req: ChatRequestModel) -> Dict[str, Any]:
         cross_top_k=req.cross_top_k,
     )
     t2 = time.perf_counter()
-    logger.info(
-        "Chat step retrieval_done: %.2f ms passages=%s",
-        (t2 - t1) * 1000.0,
-        len(retrieval_result.get("passages", []) or []),
-    )
 
     response = answer_with_rag(
         question=req.question,
         retrieval_result=retrieval_result,
     )
     t3 = time.perf_counter()
-    logger.info("Chat step answer_done: %.2f ms total=%.2f ms", (t3 - t2) * 1000.0, (t3 - t0) * 1000.0)
 
     result: Dict[str, Any] = {
         "answer": response.answer,
@@ -70,32 +64,17 @@ def chat(req: ChatRequestModel) -> Dict[str, Any]:
     }
 
     if req.include_debug:
-        all_passages = retrieval_result.get("passages", []) or []
-        all_seeds = retrieval_result.get("seed_candidates", []) or []
-
         result["debug"] = {
-            "filters": retrieval_result.get("filters", {}),
             "mode": retrieval_result.get("mode"),
-            "query_profile": retrieval_result.get("query_profile", {}),
-            "qdrant_top_k": retrieval_result.get("qdrant_top_k"),
-            "final_top_k": retrieval_result.get("final_top_k"),
-            "cross_top_k": retrieval_result.get("cross_top_k"),
-
-            "seed_candidates_count": len(all_seeds),
-            "seed_candidate_ids": [
-                x.get("node_id") for x in all_seeds[:10]
-            ],
-            "seed_candidates_preview": [
-                {
-                    "node_id": x.get("node_id"),
-                    "dense_score": x.get("dense_score"),
-                    "hybrid_score": x.get("hybrid_score"),
-                    "text": str(x.get("text") or "")[:120],
-                }
-                for x in all_seeds[:5]
-            ],
-
-            "passages_count": len(all_passages),
-            "top_passages": all_passages,
+            "reference_threshold": retrieval_result.get("reference_threshold"),
+            "max_reference_hybrid": retrieval_result.get("max_reference_hybrid"),
+            "rerank_veto": retrieval_result.get("rerank_veto"),
+            "veto_reason": retrieval_result.get("veto_reason"),
+            "topic_phrases": retrieval_result.get("topic_phrases", []),
+            "top_docs": retrieval_result.get("top_docs", []),
+            "candidate_pool": retrieval_result.get("candidate_pool", []),
+            "passages_count": len(retrieval_result.get("passages", []) or []),
+            "insufficient_context": retrieval_result.get("insufficient_context", False),
         }
+
     return result

@@ -55,5 +55,4 @@ def warmup_openai_clients() -> None:
 
 
 def get_embeding_dim(emb: OpenAIEmbeddings) -> int:
-    v = emb.embed_query("dim_check")
-    return len(v)
+    return len(emb.embed_query("dim_check"))

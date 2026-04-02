@@ -188,30 +188,65 @@ def parse_legal_document(text: str, *, fallback_doc_name: str = "") -> ParsedLeg
             current_item = None
             current_anchor = node
             continue
-
-        point_m = POINT_RE.match(line)
-        if point_m and current_clause is not None:
-            ch = point_m.group(1).lower()
-            point = f"Điểm {ch}"
+        if clause_m and current_article is None:
+            item_num = clause_m.group(1)
+            label = clause_m.group(0)
+            parent = current_section or doc_node
             node = LegalNode(
-                node_id=_new_node_id(header.doc_id, "point", current_article.article or "", current_clause.clause or "", ch),
+                node_id=_new_node_id(header.doc_id, "item", parent.label, item_num),
                 doc_id=header.doc_id,
-                node_type="point",
-                label=point,
+                node_type="item",
+                label=label,
                 text=line,
-                parent_id=current_clause.node_id,
+                parent_id=parent.node_id,
                 order_index=order,
-                level=3,
-                article=current_article.article if current_article else None,
-                clause=current_clause.clause if current_clause else None,
-                point=point,
+                level=parent.level + 1,
+                item=item_num,
             )
             order += 1
             nodes.append(node)
             node_index[node.node_id] = node
-            current_clause.children_ids.append(node.node_id)
+            parent.children_ids.append(node.node_id)
+            current_item = node
+            current_clause = None
+            current_point = None
+            current_anchor = node
+            continue
+
+        point_m = POINT_RE.match(line)
+        if point_m and (current_clause is not None or current_item is not None):
+            ch = point_m.group(1).lower()
+            point = f"Điểm {ch}"
+            parent = current_clause or current_item
+
+            point_parent_1 = (
+                current_article.article if current_article else
+                (current_item.item if current_item else "")
+            )
+            point_parent_2 = (
+                current_clause.clause if current_clause else
+                (current_item.label if current_item else "")
+            )
+
+            node = LegalNode(
+                node_id=_new_node_id(header.doc_id, "point", point_parent_1, point_parent_2, ch),
+                doc_id=header.doc_id,
+                node_type="point",
+                label=point,
+                text=line,
+                parent_id=parent.node_id,
+                order_index=order,
+                level=parent.level + 1,
+                article=current_article.article if current_article else None,
+                clause=current_clause.clause if current_clause else None,
+                point=point,
+                item=current_item.item if current_item else None,
+            )
+            order += 1
+            nodes.append(node)
+            node_index[node.node_id] = node
+            parent.children_ids.append(node.node_id)
             current_point = node
-            current_item = None
             current_anchor = node
             continue
 

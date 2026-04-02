@@ -22,7 +22,6 @@ def main() -> None:
         overlap=args.overlap,
     )
     save_bm25_stats(stats, args.output)
-
     print(f"[OK] Saved BM25 stats -> {args.output}")
     print(f"N={stats['N']}, avgdl={stats['avgdl']:.2f}, vocab={len(stats['idf'])}")
 

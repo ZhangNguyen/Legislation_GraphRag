@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from collections import Counter
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-# Unicode-aware tokenizer for Vietnamese legal text.
 TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 ARTICLE_RE = re.compile(r"điều\s+(\d+)", re.IGNORECASE)
 CLAUSE_RE = re.compile(r"khoản\s+(\d+)", re.IGNORECASE)
 POINT_RE = re.compile(r"điểm\s+([a-zđ])", re.IGNORECASE)
+
+
+TOPIC_PHRASE_MIN_TOKEN_LEN = 2
+STOPWORDS = {
+    "và", "của", "các", "những", "trong", "trước", "sau", "cho", "về", "việc", "để", "tại", "theo",
+    "là", "ở", "có", "khi", "này", "đó", "với", "một", "nhiều", "được", "đang", "cần",
+}
 
 
 def _norm_space(text: str) -> str:
@@ -18,26 +25,59 @@ def _norm_space(text: str) -> str:
 def _legal_reference_tokens(text: str) -> List[str]:
     raw = _norm_space((text or "").lower())
     extra: List[str] = []
-
     for m in ARTICLE_RE.finditer(raw):
         num = m.group(1)
         extra.extend([f"điều_{num}", f"article_{num}"])
-
     for m in CLAUSE_RE.finditer(raw):
         num = m.group(1)
         extra.extend([f"khoản_{num}", f"clause_{num}"])
-
     for m in POINT_RE.finditer(raw):
         ch = m.group(1).lower()
         extra.extend([f"điểm_{ch}", f"point_{ch}"])
-
     return extra
+
+
+def _ngrams(tokens: List[str], n: int) -> List[str]:
+    if len(tokens) < n:
+        return []
+    return [" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
 
 
 def tokenize(text: str) -> List[str]:
     raw = _norm_space(text).lower()
     base = [tok for tok in TOKEN_RE.findall(raw) if tok.strip()]
-    return base + _legal_reference_tokens(raw)
+    grams = _ngrams(base, 2) + _ngrams(base, 3)
+    return base + grams + _legal_reference_tokens(raw)
+
+
+def extract_topic_phrases(question: str) -> List[str]:
+    tokens = [tok for tok in TOKEN_RE.findall(_norm_space(question).lower()) if tok.strip()]
+    out: List[str] = []
+    for n in (3, 2):
+        for gram in _ngrams(tokens, n):
+            parts = gram.split()
+            if all(p in STOPWORDS for p in parts):
+                continue
+            if len([p for p in parts if p not in STOPWORDS]) < TOPIC_PHRASE_MIN_TOKEN_LEN:
+                continue
+            out.append(gram)
+    seen = set()
+    uniq: List[str] = []
+    for item in out:
+        if item in seen:
+            continue
+        seen.add(item)
+        uniq.append(item)
+    return uniq
+
+
+def phrase_overlap_score(question: str, text: str) -> Tuple[float, List[str]]:
+    phrases = extract_topic_phrases(question)
+    hay = _norm_space(text).lower()
+    hits = [p for p in phrases if p in hay]
+    if not phrases:
+        return 0.0, hits
+    return float(len(hits) / len(phrases)), hits
 
 
 def bm25_score(
@@ -51,26 +91,19 @@ def bm25_score(
 ) -> float:
     if not query_tokens or not doc_tokens:
         return 0.0
-
-    tf: Dict[str, int] = {}
-    for tok in doc_tokens:
-        tf[tok] = tf.get(tok, 0) + 1
-
+    tf = Counter(doc_tokens)
     doc_len = max(len(doc_tokens), 1)
     avgdl_eff = max(float(avgdl or 0.0), 1.0)
     score = 0.0
-
     for q in query_tokens:
         freq = tf.get(q, 0)
         if freq <= 0:
             continue
-
         idf = float((idf_map or {}).get(q, 1.0))
         denom = freq + k1 * (1.0 - b + b * (doc_len / avgdl_eff))
         if denom <= 0:
             continue
         score += idf * (freq * (k1 + 1.0)) / denom
-
     return float(score)
 
 
@@ -84,52 +117,28 @@ def _minmax(values: List[float]) -> List[float]:
     return [(v - lo) / (hi - lo) for v in values]
 
 
-def hybrid_rank(
-    question: str,
-    candidates: List[Dict[str, Any]],
-    *,
-    dense_key: str = "dense_score",
-    text_key: str = "retrieval_text",
-    alpha: float = 0.55,
-    idf_map: Optional[Dict[str, float]] = None,
-    avgdl: float = 0.0,
-) -> List[Tuple[float, Dict[str, Any]]]:
-    if not candidates:
-        return []
+def rrf_merge(rank_lists: List[List[str]], *, k: int = 60) -> Dict[str, float]:
+    out: Dict[str, float] = {}
+    for rank_list in rank_lists:
+        for idx, item_id in enumerate(rank_list, start=1):
+            out[item_id] = out.get(item_id, 0.0) + 1.0 / (k + idx)
+    return out
 
+
+def field_dense_bm25(question: str, texts: List[str], dense_scores: Optional[List[float]] = None) -> List[Dict[str, float]]:
     q_tokens = tokenize(question)
-
-    dense_values: List[float] = []
-    bm25_values: List[float] = []
-    enriched: List[Dict[str, Any]] = []
-
-    for cand in candidates:
-        item = dict(cand)
-        dense = float(item.get(dense_key, 0.0) or 0.0)
-        text = str(item.get(text_key) or item.get("text") or item.get("snippet") or "")
-        tokens = tokenize(text)
-        lex = bm25_score(
-            q_tokens,
-            tokens,
-            idf_map=idf_map,
-            avgdl=avgdl,
-        )
-        item["bm25_score"] = float(lex)
-        dense_values.append(dense)
-        bm25_values.append(float(lex))
-        enriched.append(item)
-
-    dense_norm = _minmax(dense_values)
+    bm25_values = [bm25_score(q_tokens, tokenize(text)) for text in texts]
     bm25_norm = _minmax(bm25_values)
-
-    ranked: List[Tuple[float, Dict[str, Any]]] = []
-    for idx, item in enumerate(enriched):
-        dense_n = dense_norm[idx] if idx < len(dense_norm) else 0.0
-        bm25_n = bm25_norm[idx] if idx < len(bm25_norm) else 0.0
-        score = alpha * dense_n + (1.0 - alpha) * bm25_n
-        item["dense_norm"] = float(dense_n)
-        item["bm25_norm"] = float(bm25_n)
-        ranked.append((float(score), item))
-
-    ranked.sort(key=lambda x: x[0], reverse=True)
-    return ranked
+    dense_scores = dense_scores or [0.0] * len(texts)
+    dense_norm = _minmax([float(x or 0.0) for x in dense_scores])
+    out: List[Dict[str, float]] = []
+    for idx in range(len(texts)):
+        out.append(
+            {
+                "dense": float(dense_scores[idx] if idx < len(dense_scores) else 0.0),
+                "dense_norm": float(dense_norm[idx] if idx < len(dense_norm) else 0.0),
+                "bm25": float(bm25_values[idx]),
+                "bm25_norm": float(bm25_norm[idx] if idx < len(bm25_norm) else 0.0),
+            }
+        )
+    return out

@@ -4,8 +4,8 @@ import json
 from typing import Any, Dict, List, Optional
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http import models as qm
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http.models import Distance, VectorParams
 
 from src.app.settings import settings
@@ -21,15 +21,11 @@ def get_qdrant_client() -> QdrantClient:
     )
 
 
-def ensure_collection(
-    client: QdrantClient,
-    vector_size: int = DEFAULT_VECTOR_SIZE,
-) -> None:
+def ensure_collection(client: QdrantClient, vector_size: int = DEFAULT_VECTOR_SIZE) -> None:
     collections = client.get_collections().collections
-    names = {c.name for c in collections}
+    names = {collection.name for collection in collections}
     if settings.qdrant_collection in names:
         return
-
     client.create_collection(
         collection_name=settings.qdrant_collection,
         vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
@@ -39,74 +35,45 @@ def ensure_collection(
 def build_filter(filters: Dict[str, Any]) -> Optional[qm.Filter]:
     if not filters:
         return None
-
     must: List[qm.FieldCondition] = []
-
-    for k, v in filters.items():
-        if v is None or v == "":
+    for key, value in filters.items():
+        if value in (None, ""):
             continue
-
-        if isinstance(v, (int, float, bool, str)):
-            must.append(qm.FieldCondition(key=k, match=qm.MatchValue(value=v)))
-        elif isinstance(v, list) and v:
-            must.append(qm.FieldCondition(key=k, match=qm.MatchAny(any=v)))
-
-    if not must:
-        return None
-
-    return qm.Filter(must=must)
+        if isinstance(value, (int, float, bool, str)):
+            must.append(qm.FieldCondition(key=key, match=qm.MatchValue(value=value)))
+        elif isinstance(value, list) and value:
+            must.append(qm.FieldCondition(key=key, match=qm.MatchAny(any=value)))
+    return qm.Filter(must=must) if must else None
 
 
-def upsert_points(
-    client: QdrantClient,
-    points: List[qm.PointStruct],
-) -> None:
+def upsert_points(client: QdrantClient, points: List[qm.PointStruct]) -> None:
     if not points:
         return
-
-    # Qdrant HTTP giới hạn payload request (mặc định thường ~32MB).
-    # Chia batch để tránh lỗi 400 "JSON payload ... is larger than allowed".
-    max_batch_bytes = 8 * 1024 * 1024  # 8MB an toàn hơn nhiều so với giới hạn 32MB
+    max_batch_bytes = 8 * 1024 * 1024
     max_batch_points = 256
 
-    def _estimate_point_bytes(p: qm.PointStruct) -> int:
-        payload = getattr(p, "payload", {}) or {}
+    def _estimate_point_bytes(point: qm.PointStruct) -> int:
+        payload = getattr(point, "payload", {}) or {}
         try:
             payload_bytes = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
         except Exception:
             payload_bytes = 0
-
-        vec = getattr(p, "vector", None)
-        if isinstance(vec, list):
-            vector_bytes = len(vec) * 4  # float32 xấp xỉ
-        else:
-            vector_bytes = 0
-
-        # overhead JSON + id + keys
+        vector = getattr(point, "vector", None)
+        vector_bytes = len(vector) * 4 if isinstance(vector, list) else 0
         return payload_bytes + vector_bytes + 2048
 
     batch: List[qm.PointStruct] = []
     batch_bytes = 0
-
-    for p in points:
-        p_bytes = _estimate_point_bytes(p)
-
-        if batch and (batch_bytes + p_bytes > max_batch_bytes or len(batch) >= max_batch_points):
-            client.upsert(
-                collection_name=settings.qdrant_collection,
-                points=batch,
-            )
+    for point in points:
+        point_bytes = _estimate_point_bytes(point)
+        if batch and (batch_bytes + point_bytes > max_batch_bytes or len(batch) >= max_batch_points):
+            client.upsert(collection_name=settings.qdrant_collection, points=batch)
             batch = []
             batch_bytes = 0
-
-        batch.append(p)
-        batch_bytes += p_bytes
-
+        batch.append(point)
+        batch_bytes += point_bytes
     if batch:
-        client.upsert(
-            collection_name=settings.qdrant_collection,
-            points=batch,
-        )
+        client.upsert(collection_name=settings.qdrant_collection, points=batch)
 
 
 def search_qdrant(
@@ -126,8 +93,6 @@ def search_qdrant(
             with_vectors=False,
         )
 
-    # qdrant-client mới dùng query_points thay cho search.
-    # Nhưng server cũ (vd 1.9.x) có thể trả 404 cho endpoint query_points.
     try:
         response = client.query_points(
             collection_name=settings.qdrant_collection,
@@ -146,7 +111,6 @@ def search_qdrant(
         if getattr(exc, "status_code", None) != 404:
             raise
 
-    # Fallback gọi REST search_points (tương thích server cũ)
     legacy_response = client.http.search_api.search_points(
         collection_name=settings.qdrant_collection,
         search_request=qm.SearchRequest(

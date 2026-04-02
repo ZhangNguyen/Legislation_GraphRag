@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import List
 
 from dotenv import load_dotenv
-from pydantic import BaseModel
 
 load_dotenv()
+
+
+def _get_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except Exception:
+        return default
+
+
+def _get_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except Exception:
+        return default
 
 
 def _split_csv(raw: str) -> List[str]:
@@ -16,10 +30,12 @@ def _split_csv(raw: str) -> List[str]:
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 
-class Settings(BaseModel):
+@dataclass(frozen=True)
+class Settings:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     openai_embed_model: str = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+    hf_token: str = os.getenv("HF_TOKEN", "")
 
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
@@ -28,33 +44,30 @@ class Settings(BaseModel):
     normalized_dir: str = os.getenv("NORMALIZED_DIR", "data/normalized")
     normalized_glob: str = os.getenv("NORMALIZED_GLOB", "*.*")
     graph_snapshot_path: str = os.getenv("GRAPH_SNAPSHOT_PATH", "outputs/runtime/runtime_graph_snapshot.json")
-
-    qdrant_top_k: int = int(os.getenv("QDRANT_TOP_K", "40"))
-    bm25_top_k: int = int(os.getenv("BM25_TOP_K", "12"))
-    final_top_k: int = int(os.getenv("FINAL_TOP_K", "8"))
-    cross_top_k: int = int(os.getenv("CROSS_TOP_K", "8"))
-    hybrid_alpha: float = float(os.getenv("HYBRID_ALPHA", "0.58"))
-
-    bundle_max_children: int = int(os.getenv("BUNDLE_MAX_CHILDREN", "3"))
-    bundle_max_siblings: int = int(os.getenv("BUNDLE_MAX_SIBLINGS", "2"))
-
     bm25_stats_path: str = os.getenv("BM25_STATS_PATH", "outputs/bm25/bm25_stats.json")
 
-    answer_max_context_passages: int = int(os.getenv("ANSWER_MAX_CONTEXT_PASSAGES", "6"))
-    answer_max_source_items: int = int(os.getenv("ANSWER_MAX_SOURCE_ITEMS", "6"))
+    doc_top_k: int = _get_int("DOC_TOP_K", 3)
+    content_top_k_per_doc: int = _get_int("CONTENT_TOP_K_PER_DOC", 3)
+    final_top_k: int = _get_int("FINAL_TOP_K", 5)
+    cross_top_k: int = _get_int("CROSS_TOP_K", 8)
+    reference_hybrid_threshold: float = _get_float("REFERENCE_HYBRID_THRESHOLD", 0.85)
+    cross_rerank_min_score: float = _get_float("CROSS_RERANK_MIN_SCORE", 0.05)
+    hybrid_alpha: float = _get_float("HYBRID_ALPHA", 0.55)
+    rrf_k: int = _get_int("RRF_K", 60)
+
+    answer_max_context_passages: int = _get_int("ANSWER_MAX_CONTEXT_PASSAGES", 5)
+    answer_max_source_items: int = _get_int("ANSWER_MAX_SOURCE_ITEMS", 5)
 
     rerank_model: str = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
     rerank_device: str = os.getenv("RERANK_DEVICE", "cpu")
-    rerank_top_n: int = int(os.getenv("RERANK_TOP_N", "12"))
+    rerank_top_n: int = _get_int("RERANK_TOP_N", 12)
 
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
-    app_port: int = int(os.getenv("APP_PORT", "8000"))
-    cors_origins: List[str] = _split_csv(os.getenv("CORS_ORIGINS", "*"))
+    app_port: int = _get_int("APP_PORT", 8000)
+    cors_origins: List[str] = None  # type: ignore[assignment]
 
-    poppler_path: str = os.getenv("POPPLER_PATH", "")
-    tesseract_cmd: str = os.getenv("TESSERACT_CMD", "")
-    tesseract_lang: str = os.getenv("TESSERACT_LANG", "vie")
-    ocr_dpi: int = int(os.getenv("OCR_DPI", "300"))
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "cors_origins", _split_csv(os.getenv("CORS_ORIGINS", "*")))
 
 
 settings = Settings()
