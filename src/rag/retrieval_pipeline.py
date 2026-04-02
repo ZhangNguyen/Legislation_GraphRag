@@ -1162,6 +1162,88 @@ def _generic_route(question: str, graph: Dict[str, Any], doc_candidates: List[Di
 # Main public API
 # =========================
 
+def _is_legal_unit(node: Dict[str, Any]) -> bool:
+    md = dict(node.get("metadata") or {})
+    node_type = str(md.get("node_type") or node.get("node_type") or "").lower()
+    return node_type in {"article", "clause", "point"}
+
+
+def _iter_doc_unit_passages(graph: Dict[str, Any], doc_key: str) -> List[Dict[str, Any]]:
+    doc_catalog = _build_doc_catalog(graph)
+    doc_info = _find_doc_info(doc_catalog, doc_key)
+    if not doc_info:
+        return []
+    node_idx = _node_index(graph)
+    out: List[Dict[str, Any]] = []
+    for nid in doc_info.get("member_node_ids") or []:
+        node = node_idx.get(str(nid))
+        if not node or not _is_legal_unit(node):
+            continue
+        out.append(_build_passage(node, doc_info, graph))
+    return out
+
+
+def _hybrid_rrf_rank(question: str, passages: List[Dict[str, Any]], question_vec: List[float]) -> List[Dict[str, Any]]:
+    if not passages:
+        return []
+    q_terms = tokenize(question)
+    texts = [str(p.get("bundle_text") or p.get("retrieval_text") or p.get("text") or "") for p in passages]
+    emb_map = _batch_embed_texts(texts, cache=_PASSAGE_EMBED_CACHE)
+
+    dense_scores: List[float] = []
+    bm25_scores: List[float] = []
+    for txt in texts:
+        key = _text_cache_key(txt)
+        dense_scores.append(_cosine(question_vec, emb_map.get(key, [])))
+        bm25_scores.append(bm25_score(q_terms, tokenize(txt)))
+
+    dense_norm = _minmax(dense_scores)
+    bm25_norm = _minmax(bm25_scores)
+    dense_rank = [passages[i]["node_id"] for i in sorted(range(len(passages)), key=lambda i: dense_norm[i], reverse=True)]
+    bm25_rank = [passages[i]["node_id"] for i in sorted(range(len(passages)), key=lambda i: bm25_norm[i], reverse=True)]
+    rrf = _rrf_fuse([dense_rank, bm25_rank])
+
+    enriched: List[Dict[str, Any]] = []
+    for i, p in enumerate(passages):
+        item = dict(p)
+        item["dense_score"] = float(dense_norm[i])
+        item["bm25_score"] = float(bm25_norm[i])
+        item["hybrid_score"] = float(rrf.get(item.get("node_id"), 0.0))
+        enriched.append(item)
+    enriched.sort(key=lambda x: float(x.get("hybrid_score", 0.0)), reverse=True)
+    return enriched
+
+
+def _collect_change_source_passages(passage: Dict[str, Any], graph: Dict[str, Any]) -> List[Dict[str, Any]]:
+    node_id = str(passage.get("node_id") or "")
+    if not node_id:
+        return []
+    node_idx = _node_index(graph)
+    reverse_adj = graph.get("reverse_adjacency", {}) or {}
+    rel_hits: List[str] = []
+    for edge in reverse_adj.get(node_id, []):
+        rel = _norm_space(str(edge.get("relation_type") or "")).lower()
+        if any(k in rel for k in ["sửa đổi", "bổ sung", "bãi bỏ", "amend", "repeal"]):
+            rel_hits.append(str(edge.get("source_id") or ""))
+
+    md = dict((node_idx.get(node_id) or {}).get("metadata") or {})
+    for source_id in md.get("source_node_ids") or []:
+        rel_hits.append(str(source_id))
+
+    out: List[Dict[str, Any]] = []
+    for sid in rel_hits:
+        source_node = node_idx.get(sid)
+        if not source_node:
+            continue
+        source_md = dict(source_node.get("metadata") or {})
+        source_doc_key = _candidate_doc_key(source_md)
+        doc_info = _find_doc_info(_build_doc_catalog(graph), source_doc_key)
+        if not doc_info:
+            continue
+        out.append(_build_passage(source_node, doc_info, graph))
+    return out
+
+
 def retrieve_with_graph(
     question: str,
     graph: Dict[str, Any],
@@ -1176,94 +1258,96 @@ def retrieve_with_graph(
     _ = qdrant_top_k
     _ = graph_hops
     _ = max_graph_nodes
+    _ = filters
 
     question = _norm_space(question)
-    query_profile = infer_query_profile(question)
-    merged_filters = dict(query_profile.get("filters") or {})
-    for k, v in (filters or {}).items():
-        if v not in (None, ""):
-            merged_filters[k] = v
-    if merged_filters:
-        query_profile["filters"] = merged_filters
-
     question_vec = _question_embedding(question)
-    doc_candidates = rank_documents_by_sketch_rrf(
-        question,
-        graph,
-        top_k=_DOCUMENT_TOP_K,
-        question_vec=question_vec,
-        filters=merged_filters,
-        query_profile=query_profile,
-    )
-    doc_seed_stage = str((doc_candidates[0].get("doc_seed_stage") if doc_candidates else "none") or "none")
+    doc_candidates = rank_documents_by_sketch_rrf(question, graph, top_k=3, question_vec=question_vec, filters={}, query_profile={})
 
-    final_limit = max(1, int(final_top_k or _FINAL_TOP_K))
-    cross_limit = max(1, int(cross_top_k or (_PASSAGES_PER_DOC * max(1, len(doc_candidates)))))
+    top_docs = doc_candidates[:3]
+    per_doc = 3
+    threshold = 0.85
+    final_limit = max(1, int(final_top_k or 5))
+    cross_limit = max(1, int(cross_top_k or 12))
 
-    route = str(query_profile.get("route") or "factoid")
-    if _should_force_heading_route(question, graph, doc_candidates, query_profile, question_vec):
-        route = "heading_list"
-        query_profile["route"] = "heading_list"
-        query_profile["auto_route_reason"] = "heading_overlap"
+    legal_candidates: List[Dict[str, Any]] = []
+    for doc in top_docs:
+        legal_candidates.extend(_iter_doc_unit_passages(graph, str(doc.get("doc_key") or "")))
+    ranked_units = _hybrid_rrf_rank(question, legal_candidates, question_vec)
 
-    if route == "heading_list":
-        candidate_pool, final_passages = _heading_list_route(
-            question,
-            graph,
-            doc_candidates,
-            query_profile,
-            question_vec,
-            final_limit,
-            cross_limit,
-        )
-        pipeline = f"document_seed[{doc_seed_stage}] -> article_bundle_rank -> expand_same_article -> topk"
-    elif route == "version_change":
-        candidate_pool, final_passages = _version_change_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
-        pipeline = f"document_seed[{doc_seed_stage}] -> change_candidates -> multifield_hybrid -> cross_rerank -> topk"
+    above_threshold = [p for p in ranked_units if float(p.get("dense_score", 0.0)) >= threshold]
+
+    if above_threshold:
+        pipeline = "doc_top3 -> legal_units_hybrid_rrf -> threshold_gate -> collect_change_sources -> cross_rerank_top5"
+        merged: List[Dict[str, Any]] = []
+        seen: Set[str] = set()
+        for p in above_threshold[:cross_limit]:
+            nid = str(p.get("node_id") or "")
+            if nid and nid not in seen:
+                seen.add(nid)
+                merged.append(p)
+            for src in _collect_change_source_passages(p, graph):
+                sid = str(src.get("node_id") or "")
+                if sid and sid not in seen:
+                    seen.add(sid)
+                    src["bundle_text"] = _norm_space(
+                        f"{src.get('bundle_text') or ''}\n\n[Target]\n{p.get('bundle_text') or ''}"
+                    )
+                    src["retrieval_text"] = src["bundle_text"]
+                    merged.append(src)
+        candidate_pool = merged
+        final_passages = cross_rerank(question, merged[:cross_limit], top_n=min(final_limit, len(merged)), query_profile={})[:final_limit]
+        mode = "intent_route::legal_reference"
     else:
-        candidate_pool, final_passages = _generic_route(question, graph, doc_candidates, query_profile, question_vec, cross_limit, final_limit)
-        pipeline = f"document_seed[{doc_seed_stage}] -> provision/article candidates -> multifield_hybrid -> cross_rerank -> completion -> topk"
+        pipeline = "doc_top3 -> sibling_group_hybrid_rrf_top3_per_doc -> cross_rerank_global -> top5"
+        sibling_groups: List[Dict[str, Any]] = []
+        node_idx = _node_index(graph)
+        for doc in top_docs:
+            doc_key = str(doc.get("doc_key") or "")
+            passages = _iter_doc_unit_passages(graph, doc_key)
+            grouped: List[Dict[str, Any]] = []
+            seen_roots: Set[str] = set()
+            for p in passages:
+                md = dict(p.get("metadata") or {})
+                sibs = [str(x) for x in md.get("sibling_ids") or [] if str(x)]
+                root = "|".join(sorted([str(p.get("node_id") or "")] + sibs))
+                if root in seen_roots:
+                    continue
+                seen_roots.add(root)
+                nodes = [node_idx.get(str(p.get("node_id") or ""))] + [node_idx.get(x) for x in sibs]
+                text_blocks = [_norm_space(str((n or {}).get("text") or "")) for n in nodes if n]
+                item = dict(p)
+                item["bundle_text"] = "\n".join([x for x in text_blocks if x])
+                item["retrieval_text"] = item["bundle_text"]
+                grouped.append(item)
+            ranked_doc = _hybrid_rrf_rank(question, grouped, question_vec)
+            sibling_groups.extend(ranked_doc[:per_doc])
+        candidate_pool = sibling_groups
+        final_passages = cross_rerank(question, sibling_groups[:cross_limit], top_n=min(final_limit, len(sibling_groups)), query_profile={})[:final_limit]
+        mode = "intent_route::content"
 
     for idx, passage in enumerate(final_passages, start=1):
         passage["rank"] = idx
-        passage["final_score"] = float(
-            passage.get("cross_score", passage.get("hybrid_score", 0.0)) or 0.0
-        )
-
-    doc_groups: List[Dict[str, Any]] = []
-    for doc in doc_candidates:
-        items = [p for p in final_passages if str(p.get("doc_key") or "") == str(doc.get("doc_key") or "")]
-        doc_groups.append(
-            {
-                "doc_key": doc.get("doc_key"),
-                "doc_score": float(doc.get("rrf_score", 0.0) or 0.0),
-                "law_name": doc.get("law_name"),
-                "source": doc.get("source"),
-                "items": items,
-                "doc_sketch": doc.get("doc_sketch"),
-            }
-        )
+        passage["final_score"] = float(passage.get("cross_score", passage.get("hybrid_score", 0.0)) or 0.0)
 
     return {
         "question": question,
-        "mode": f"intent_route::{route}",
-        "filters": merged_filters,
+        "mode": mode,
+        "filters": {},
         "qdrant_top_k": None,
         "final_top_k": final_limit,
         "cross_top_k": cross_limit,
-        "seed_candidates": doc_candidates,
-        "doc_groups": doc_groups,
+        "seed_candidates": top_docs,
+        "doc_groups": [],
         "candidate_pool": candidate_pool,
         "passages": final_passages,
         "query_profile": {
             "pipeline": pipeline,
-            "route": route,
-            "document_top_k": _DOCUMENT_TOP_K,
-            "passages_per_doc": _PASSAGES_PER_DOC,
+            "route": mode.replace("intent_route::", ""),
+            "document_top_k": 3,
+            "passages_per_doc": 3,
             "uses_qdrant": False,
             "uses_graph_summary_nodes": False,
-            "intent_terms": query_profile.get("intent_terms") or [],
-            "filters": merged_filters,
-            "document_seed_stage": doc_seed_stage,
+            "threshold": threshold,
         },
     }

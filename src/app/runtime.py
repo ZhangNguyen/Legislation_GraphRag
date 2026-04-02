@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from src.app.settings import settings
 from src.rag.chunking_legal import legal_chunk
 from src.rag.document_header import extract_document_header
+from src.rag.graph_builder import build_graph_from_normalized
 from src.rag.ingestion import upsert_chunks
 from src.rag.openai_clients import get_embedings, get_llm
 from src.storage.qdrant_store import ensure_collection, get_qdrant_client
@@ -584,76 +585,15 @@ def build_runtime_graph(
     glob_pattern = glob_pattern or settings.normalized_glob
     logger.info("Graph build started: input_dir=%s glob=%s", input_dir, glob_pattern)
 
-    base = Path(input_dir)
-    if not base.exists():
-        raise RuntimeError(f"Missing folder: {base}")
-
     try:
-        nodes: List[Dict[str, Any]] = []
-        edges: List[Dict[str, Any]] = []
-        doc_index: Dict[str, Dict[str, Any]] = {}
-        parent_to_children: Dict[str, List[str]] = defaultdict(list)
-
-        for fp in sorted(base.glob(glob_pattern)):
-            if fp.suffix.lower() not in {".pdf", ".txt"}:
-                continue
-
-            text = load_document(fp)
-            header = extract_document_header(text, fallback_name=fp.stem)
-            doc_prefix = _slugify(fp.stem)
-            doc_meta = _normalize_doc_meta(header.to_metadata())
-            doc_meta["doc_id"] = doc_prefix
-            doc_meta["file_name"] = fp.name
-            doc_meta["source_path"] = str(fp)
-            doc_index[doc_prefix] = doc_meta
-
-            chunks = legal_chunk(text, fallback_doc_name=fp.stem)
-            chunks = _prefix_chunks(chunks, doc_prefix, doc_meta=doc_meta)
-
-            for ch in chunks:
-                md = _normalize_doc_meta(dict(ch.get("metadata") or {}))
-                node_id = str(md.get("node_id") or md.get("chunk_id") or "")
-                if not node_id:
-                    continue
-                node = {
-                    "node_id": node_id,
-                    "node_type": md.get("node_type") or "text",
-                    "text": str(ch.get("text") or "").strip(),
-                    "retrieval_text": str(ch.get("retrieval_text") or ch.get("text") or "").strip(),
-                    "rerank_text": str(ch.get("rerank_text") or ch.get("retrieval_text") or ch.get("text") or "").strip(),
-                    "metadata": md,
-                }
-                nodes.append(node)
-                parent_id = md.get("parent_id")
-                if parent_id:
-                    edges.append({"source_id": str(parent_id), "target_id": node_id, "relation_type": "HAS_CHILD"})
-                    parent_to_children[str(parent_id)].append(node_id)
-
-        nodes = _dedup_nodes(nodes)
-        edges = _dedup_edges(edges)
-        sibling_map = _build_sibling_map(parent_to_children)
-        node_index = {str(n["node_id"]): n for n in nodes if n.get("node_id")}
-        for node_id, node in node_index.items():
-            md = node.setdefault("metadata", {})
-            md["children_ids"] = parent_to_children.get(node_id, md.get("children_ids", []))
-            md["sibling_ids"] = sibling_map.get(node_id, md.get("sibling_ids", []))
-            doc_id = str(md.get("doc_id") or "")
-            if doc_id in doc_index:
-                for key, val in doc_index[doc_id].items():
-                    if md.get(key) in (None, "") and val not in (None, ""):
-                        md[key] = val
-        graph = {
-            "nodes": nodes,
-            "edges": edges,
-            "doc_index": doc_index,
-        }
+        graph = build_graph_from_normalized(input_dir, glob_pattern)
         graph = _augment_graph_with_runtime_summaries(graph)
         graph = _rebuild_runtime_maps(graph)
         _apply_runtime_graph(graph, built_seconds=time.perf_counter() - start)
         _save_graph_snapshot(graph)
         logger.info(
             "Graph build finished: docs=%s nodes=%s edges=%s aliases=%s took=%.2fs",
-            len(doc_index), len(graph.get("nodes", [])), len(graph.get("edges", [])), len(graph.get("alias_index", {})), _RUNTIME["last_graph_build_seconds"]
+            len(graph.get("doc_index", {})), len(graph.get("nodes", [])), len(graph.get("edges", [])), len(graph.get("alias_index", {})), _RUNTIME["last_graph_build_seconds"]
         )
         return graph
     finally:
