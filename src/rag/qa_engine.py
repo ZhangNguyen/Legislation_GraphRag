@@ -20,32 +20,17 @@ Nguyên tắc bắt buộc:
 - Không suy diễn vượt quá ngữ cảnh truy xuất.
 - Nếu ngữ cảnh chưa đủ để khẳng định thì phải nói rõ là chưa đủ căn cứ.
 - Khi có thể, nêu căn cứ theo văn bản, điều, khoản, điểm hoặc vị trí tương ứng.
-
-Quy tắc trình bày:
-- Nếu câu hỏi là dạng liệt kê như: nguyên tắc, đối tượng áp dụng, trách nhiệm, bao gồm những gì, gồm những ai, các trường hợp, nội dung, phương thức, hồ sơ, điều kiện, thời hạn, trình tự, thủ tục... thì phải liệt kê đầy đủ tất cả các ý có trong ngữ cảnh.
-- Không được chỉ lấy 1 ý tiêu biểu rồi dừng.
-- Nếu ngữ cảnh có nhiều ý đánh số hoặc nhiều gạch đầu dòng, hãy giữ cấu trúc liệt kê tương ứng.
-- Nếu câu hỏi không phải dạng liệt kê thì trả lời tự nhiên, nhưng vẫn phải bám sát ngữ cảnh truy xuất.
 """.strip()
 
-LIST_STYLE_TRIGGERS = [
-    "nguyên tắc",
-    "đối tượng áp dụng",
-    "đối tượng",
-    "trách nhiệm",
-    "bao gồm",
-    "gồm những gì",
-    "gồm những ai",
-    "gồm ai",
-    "các trường hợp",
-    "trường hợp",
-    "nội dung",
-    "phương thức",
-    "hồ sơ",
-    "điều kiện",
-    "thời hạn",
-    "trình tự",
-    "thủ tục",
+DOC_SCOPE_SUMMARY_TRIGGERS = [
+    "quy định về vấn đề gì",
+    "quy định về gì",
+    "nói về vấn đề gì",
+    "nói về gì",
+    "điều chỉnh vấn đề gì",
+    "điều chỉnh gì",
+    "về vấn đề gì",
+    "phạm vi điều chỉnh là gì",
 ]
 
 
@@ -65,11 +50,6 @@ def _clean_preserve_lines(text: str) -> str:
 
 
 def _restore_inline_numbered_list(text: str) -> str:
-    """
-    Nếu chunk bị dồn thành một dòng kiểu:
-    '1. ... 2. ... 3. ...'
-    thì tách lại thành nhiều dòng để LLM nhìn rõ cấu trúc.
-    """
     raw = _clean_preserve_lines(text)
     if not raw:
         return ""
@@ -86,15 +66,62 @@ def _postprocess_answer(text: str) -> str:
     return raw.strip()
 
 
-def _is_list_style_question(question: str) -> bool:
+def _is_doc_scope_summary_question(question: str) -> bool:
     q = _norm_space(question).lower()
-    return any(trigger in q for trigger in LIST_STYLE_TRIGGERS)
+    if not q:
+        return False
+    if not any(t in q for t in DOC_SCOPE_SUMMARY_TRIGGERS):
+        return False
+    return any(x in q for x in ["văn bản", "thông tư", "nghị định", "quyết định", "luật", "bộ luật", "nghị quyết"])
 
 
-def _group_for_context(passages: List[Dict[str, Any]], max_items: int) -> List[Dict[str, Any]]:
+def _score_passage_for_doc_scope(item: Dict[str, Any]) -> tuple:
+    md = dict(item.get("metadata") or {})
+    artifact = str(md.get("artifact_type") or "").lower()
+    path_title = _norm_space(str(md.get("path_title") or md.get("title") or "")).lower()
+    text = _norm_space(str(item.get("local_text") or item.get("text") or item.get("snippet") or "")).lower()
+    final_score = float(item.get("final_score", 0.0) or 0.0)
+
+    artifact_rank = 0
+    if artifact == "doc_sketch":
+        artifact_rank = 4
+    elif artifact == "article_bundle" and ("điều 1" in path_title or "phạm vi điều chỉnh" in text):
+        artifact_rank = 3
+    elif artifact == "evidence" and ("điều 1" in path_title or "phạm vi điều chỉnh" in text):
+        artifact_rank = 2
+    elif "phạm vi điều chỉnh" in text:
+        artifact_rank = 1
+
+    path_rank = 0
+    if "điều 1" in path_title:
+        path_rank += 2
+    if "phạm vi điều chỉnh" in path_title:
+        path_rank += 2
+
+    text_rank = 0
+    if "phạm vi điều chỉnh" in text:
+        text_rank += 3
+    if text.startswith("điều 1."):
+        text_rank += 1
+
+    return (artifact_rank, path_rank, text_rank, final_score)
+
+
+def _select_passages_for_context(question: str, passages: List[Dict[str, Any]], max_items: int) -> List[Dict[str, Any]]:
+    if not passages:
+        return []
+
+    if _is_doc_scope_summary_question(question):
+        ranked = sorted(passages, key=_score_passage_for_doc_scope, reverse=True)
+        return ranked[: min(2, max_items)]
+
+    return passages[:max_items]
+
+
+def _group_for_context(passages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     grouped: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 
-    for p in passages[:max_items]:
+    for p in passages:
         md = dict(p.get("metadata") or {})
         doc_key = str(p.get("doc_key") or md.get("doc_id") or md.get("official_title") or "unknown")
 
@@ -119,8 +146,9 @@ def _group_for_context(passages: List[Dict[str, Any]], max_items: int) -> List[D
     return docs
 
 
-def _build_context(passages: List[Dict[str, Any]], max_items: int) -> str:
-    docs = _group_for_context(passages, max_items=max_items)
+def _build_context(question: str, passages: List[Dict[str, Any]], max_items: int) -> str:
+    selected = _select_passages_for_context(question, passages, max_items=max_items)
+    docs = _group_for_context(selected)
     blocks: List[str] = []
 
     for doc in docs:
@@ -139,6 +167,7 @@ def _build_context(passages: List[Dict[str, Any]], max_items: int) -> str:
             )
 
             section_bits: List[str] = [f"[Đoạn {idx}]"]
+
             if path_title:
                 section_bits.append(f"Vị trí: {path_title}")
             if shared_text:
@@ -153,11 +182,12 @@ def _build_context(passages: List[Dict[str, Any]], max_items: int) -> str:
     return "\n\n" + ("\n\n---\n\n".join(blocks) if blocks else "")
 
 
-def _build_sources(passages: List[Dict[str, Any]], max_items: int) -> List[SourceItem]:
+def _build_sources(question: str, passages: List[Dict[str, Any]], max_items: int) -> List[SourceItem]:
+    selected = _select_passages_for_context(question, passages, max_items=max_items)
     out: List[SourceItem] = []
     seen = set()
 
-    for p in passages[:max_items]:
+    for p in selected:
         md = dict(p.get("metadata") or {})
         chunk_id = str(p.get("node_id") or md.get("chunk_id") or md.get("node_id") or "")
         if not chunk_id or chunk_id in seen:
@@ -180,27 +210,23 @@ def _build_sources(passages: List[Dict[str, Any]], max_items: int) -> List[Sourc
 
 
 def _build_user_prompt(question: str, context: str) -> str:
-    is_list_q = _is_list_style_question(question)
-
-    if is_list_q:
-        answer_rules = """
-Yêu cầu trả lời:
-- Đây là câu hỏi dạng liệt kê.
-- Hãy trả lời đúng theo những gì có trong ngữ cảnh truy xuất.
-- Phải liệt kê đầy đủ tất cả các ý có trong ngữ cảnh.
-- Không được rút còn 1 ý đại diện.
-- Nếu ngữ cảnh có các ý đánh số như 1., 2., 3., 4. thì phải nêu đủ các ý đó.
-- Nếu ngữ cảnh có nhiều gạch đầu dòng, hãy trình bày lại thành danh sách rõ ràng.
-- Sau phần trả lời, có thể nêu căn cứ ngắn gọn theo điều/khoản nếu ngữ cảnh thể hiện rõ.
+    if _is_doc_scope_summary_question(question):
+        extra = """
+Yêu cầu bổ sung cho loại câu hỏi này:
+- Đây là câu hỏi hỏi chủ đề hoặc phạm vi chính của văn bản.
+- Ưu tiên trả lời gọn trong 1 câu nếu ngữ cảnh đã đủ rõ.
+- Chỉ nêu nội dung chính của văn bản.
+- Không mở rộng sang các điều khoản chi tiết khác nếu câu hỏi không yêu cầu.
 """.strip()
     else:
-        answer_rules = """
-Yêu cầu trả lời:
-- Hãy trả lời đúng theo ngữ cảnh truy xuất.
-- Không cần cố rút gọn.
+        extra = """
+Yêu cầu bổ sung:
+- Trả lời dựa hoàn toàn trên ngữ cảnh truy xuất.
 - Không thêm thông tin ngoài ngữ cảnh.
+- Không cần cố rút gọn.
+- Không cần ép buộc theo mẫu liệt kê hay trả lời ngắn.
+- Trình bày tự nhiên, miễn là bám sát ngữ cảnh.
 - Nếu ngữ cảnh chỉ nói được đến đâu thì trả lời đúng đến đó.
-- Nếu có thể, nêu căn cứ theo văn bản và vị trí.
 """.strip()
 
     return f"""
@@ -210,7 +236,9 @@ Câu hỏi:
 Ngữ cảnh:
 {context}
 
-{answer_rules}
+{extra}
+
+Nếu có thể, nêu căn cứ theo văn bản và vị trí tương ứng.
 """.strip()
 
 
@@ -224,7 +252,7 @@ def answer_with_rag(question: str, retrieval_result: Dict[str, Any]) -> ChatResp
             sources=[],
         )
 
-    context = _build_context(passages, max_items=settings.answer_max_context_passages)
+    context = _build_context(question, passages, max_items=settings.answer_max_context_passages)
     user_prompt = _build_user_prompt(question, context)
 
     llm = get_llm()
@@ -241,5 +269,5 @@ def answer_with_rag(question: str, retrieval_result: Dict[str, Any]) -> ChatResp
 
     return ChatResponse(
         answer=answer,
-        sources=_build_sources(passages, max_items=settings.answer_max_source_items),
+        sources=_build_sources(question, passages, max_items=settings.answer_max_source_items),
     )

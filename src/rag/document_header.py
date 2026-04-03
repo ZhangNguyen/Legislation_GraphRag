@@ -54,22 +54,16 @@ CHAPTER_START_RE = re.compile(r"^Chương\s+[IVXLC\d]+", re.IGNORECASE)
 ITEM_START_RE = re.compile(r"^\d+\.\s+")
 POINT_START_RE = re.compile(r"^[a-zđ]\)\s+", re.IGNORECASE)
 
-# Bắt tên file kiểu:
+# Hỗ trợ tên file kiểu:
 # 01_2026_TT-NHNN_697839
-# 04_2026_TT-BYT_697720
-# 01_2026_QD-CTUBND_697076
-# 01_CD-BTC_696881
+# 04_2026_TT-BYT_123456
+# 01_2026_QD-UBND_999999
 FILENAME_DOC_NUMBER_FULL_RE = re.compile(
-    r"(?i)\b(?P<num>\d{1,4})_(?:(?P<year>\d{4})_)?(?P<code>[A-ZĐ]{1,6}(?:-[A-ZĐ0-9]{1,20})+)\b"
+    r"(?i)(?<![A-Z0-9Đ])(?P<num>\d{1,4})_(?:(?P<year>\d{4})_)?(?P<code>[A-ZĐ]{1,6}(?:-[A-ZĐ0-9]{1,20})+)(?:_[0-9]+)?(?![A-Z0-9Đ])"
 )
 
 TITLE_ROLE_STOP_RE = re.compile(
     r"^(BỘ TRƯỞNG|THỨ TRƯỞNG|THỐNG ĐỐC|PHÓ THỐNG ĐỐC|CHỦ TỊCH|PHÓ CHỦ TỊCH|CỤC TRƯỞNG|PHÓ CỤC TRƯỞNG|VIỆN TRƯỞNG|CHÁNH ÁN|TỔNG KIỂM TOÁN)\b",
-    re.IGNORECASE,
-)
-
-ACTION_LINE_RE = re.compile(
-    r"^(?P<role>BỘ TRƯỞNG|THỨ TRƯỞNG|THỐNG ĐỐC|PHÓ THỐNG ĐỐC|CHỦ TỊCH|PHÓ CHỦ TỊCH|CỤC TRƯỞNG|PHÓ CỤC TRƯỞNG|VIỆN TRƯỞNG|CHÁNH ÁN|TỔNG KIỂM TOÁN|HỘI ĐỒNG NHÂN DÂN)\s+(?P<body>.+?)(?:\s+ban hành\b|\s+điện\s*:?)",
     re.IGNORECASE,
 )
 
@@ -143,8 +137,16 @@ def _doc_number_from_filename(fallback_name: str) -> str:
     return f"{num}/{code}"
 
 
+def _find_doc_type(lines: List[str]) -> Tuple[str, Optional[int]]:
+    for idx, line in enumerate(lines[:20]):
+        up = _norm_space(line).upper()
+        if up in DOC_TYPES:
+            return up.title(), idx
+    return "", None
+
+
 def _pick_doc_number(lines: List[str], fallback_name: str = "") -> str:
-    # Ưu tiên đúng dòng Số:
+    # 1) ưu tiên bắt ở đầu file
     for line in lines[:50]:
         m = NUMBER_LINE_RE.match(line)
         if m:
@@ -152,11 +154,20 @@ def _pick_doc_number(lines: List[str], fallback_name: str = "") -> str:
             if cleaned:
                 return cleaned
 
-    # Fallback từ tên file
+    # 2) quét toàn file để bắt case số hiệu nằm cuối văn bản
+    for line in lines:
+        m = NUMBER_LINE_RE.match(line)
+        if m:
+            cleaned = _clean_doc_number(m.group(1))
+            if cleaned:
+                return cleaned
+
+    # 3) fallback từ tên file
     return _doc_number_from_filename(fallback_name)
 
 
 def _pick_date(lines: List[str], fallback_name: str = "") -> Tuple[str, int, str]:
+    # 1) ưu tiên bắt ngày ở đầu file
     for line in lines[:60]:
         m = DATE_RE.search(line)
         if m:
@@ -166,7 +177,18 @@ def _pick_date(lines: List[str], fallback_name: str = "") -> Tuple[str, int, str
             place = _norm_space(m.group("place") or "")
             return f"{day:02d}/{month:02d}/{year:04d}", year, place
 
-    for line in lines[:60]:
+    # 2) quét ngược toàn file để bắt case ngày nằm cuối văn bản
+    for line in reversed(lines):
+        m = DATE_RE.search(line)
+        if m:
+            day = int(m.group("day"))
+            month = int(m.group("month"))
+            year = int(m.group("year"))
+            place = _norm_space(m.group("place") or "")
+            return f"{day:02d}/{month:02d}/{year:04d}", year, place
+
+    # 3) fallback kiểu dd/mm/yyyy trong file
+    for line in reversed(lines):
         m = DATE_SLASH_RE.search(line)
         if m:
             day = int(m.group("day"))
@@ -174,6 +196,7 @@ def _pick_date(lines: List[str], fallback_name: str = "") -> Tuple[str, int, str
             year = int(m.group("year"))
             return f"{day:02d}/{month:02d}/{year:04d}", year, ""
 
+    # 4) fallback từ tên file nếu có
     fb = _norm_space(fallback_name)
     m = DATE_SLASH_RE.search(fb)
     if m:
@@ -185,107 +208,71 @@ def _pick_date(lines: List[str], fallback_name: str = "") -> Tuple[str, int, str
     return "", 0, ""
 
 
-def _find_doc_type(lines: List[str]) -> Tuple[str, Optional[int]]:
-    for idx, line in enumerate(lines[:40]):
-        clean = _norm_space(line).upper()
-        if clean in DOC_TYPES:
-            return clean, idx
-    return "", None
-
-
-def _is_title_stop(line: str) -> bool:
-    raw = _norm_space(line)
-    if not raw:
-        return True
-    if NUMBER_LINE_RE.match(raw):
-        return True
-    if DATE_RE.search(raw) or DATE_SLASH_RE.search(raw):
-        return True
-    if TITLE_ROLE_STOP_RE.match(raw):
-        return True
-    for pat in TITLE_STOP_PATTERNS:
-        if pat.search(raw):
-            return True
-    return False
-
-
-def _find_body_start_index(lines: List[str], start_idx: int = 0) -> int:
-    for idx in range(start_idx, min(len(lines), 160)):
-        line = _norm_space(lines[idx])
-        if ARTICLE_START_RE.match(line) or CHAPTER_START_RE.match(line):
-            return idx
-    return min(len(lines), max(start_idx, 0))
-
-
 def _pick_title_block(lines: List[str], doc_type_idx: Optional[int]) -> Tuple[str, str, int]:
     if doc_type_idx is None:
         return "", "", 0
 
     title_lines: List[str] = []
-    stop_idx = doc_type_idx + 1
+    start = doc_type_idx + 1
+    body_start_index = start
 
-    for idx in range(doc_type_idx + 1, min(len(lines), doc_type_idx + 12)):
+    for idx in range(start, min(len(lines), start + 12)):
         line = _norm_space(lines[idx])
-
-        if _is_title_stop(line):
-            stop_idx = idx
-            break
-
-        if _is_upper_like(line) or line.upper().startswith(("VỀ VIỆC", "QUY ĐỊNH", "BAN HÀNH", "SỬA ĐỔI", "BỔ SUNG", "BÃI BỎ")):
-            title_lines.append(line)
-            stop_idx = idx + 1
+        if not line:
             continue
 
-        if title_lines:
-            stop_idx = idx
+        if any(p.search(line) for p in TITLE_STOP_PATTERNS):
+            body_start_index = idx
             break
 
-        stop_idx = idx
+        if NUMBER_LINE_RE.match(line) or DATE_RE.search(line) or DATE_SLASH_RE.search(line):
+            body_start_index = idx
+            break
+
+        if _is_upper_like(line) or line.upper().startswith("VỀ VIỆC"):
+            title_lines.append(line)
+            body_start_index = idx + 1
+            continue
+
+        body_start_index = idx
         break
 
     title_block = "\n".join(title_lines).strip()
-    official_title = _norm_space(" ".join(title_lines))
-    body_start_index = _find_body_start_index(lines, start_idx=stop_idx)
+    official_title = " ".join(title_lines).strip()
     return title_block, official_title, body_start_index
 
 
 def _extract_agency_from_action_line(line: str) -> str:
     raw = _norm_space(line)
-    if raw.lower().startswith(("căn cứ", "theo đề nghị", "xét")):
-        return ""
-    m = ACTION_LINE_RE.match(raw)
+    m = re.match(
+        r"^(Bộ trưởng|Thủ tướng|Chủ tịch|Thống đốc|Chánh án|Viện trưởng|Tổng Kiểm toán)\b.*",
+        raw,
+        re.IGNORECASE,
+    )
     if not m:
         return ""
-    role = _norm_space(m.group("role"))
-    body = _norm_space(m.group("body"))
-    return _norm_space(f"{role} {body}")
+
+    if raw.lower().startswith("thống đốc ngân hàng nhà nước"):
+        return "Thống đốc Ngân hàng Nhà nước Việt Nam"
+    return raw
 
 
 def _looks_like_agency_line(line: str) -> bool:
     raw = _norm_space(line)
-    up = raw.upper()
-
-    if not raw or up in AGENCY_SKIP_EXACT:
+    if not raw:
         return False
-    if raw.lower().startswith(("căn cứ", "theo đề nghị", "xét")):
+    if raw in AGENCY_SKIP_EXACT:
         return False
-    if NUMBER_LINE_RE.match(raw) or DATE_RE.search(raw) or DATE_SLASH_RE.search(raw):
-        return False
-    if _looks_like_doc_type(raw):
-        return False
-    if ARTICLE_START_RE.match(raw) or CHAPTER_START_RE.match(raw) or ITEM_START_RE.match(raw) or POINT_START_RE.match(raw):
-        return False
-
     if _extract_agency_from_action_line(raw):
         return True
-
     return bool(AGENCY_LINE_RE.match(raw))
 
 
 def _pick_issuing_agency(lines: List[str], doc_type_idx: Optional[int], official_title: str) -> str:
     official_title_up = _norm_space(official_title).upper()
 
-    for line in lines[:50]:
+    # Ưu tiên dòng kiểu "Thống đốc ... ban hành ..."
+    for line in lines[:80]:
         cand = _extract_agency_from_action_line(line)
         if cand:
             cand_up = cand.upper()
@@ -306,7 +293,7 @@ def _pick_issuing_agency(lines: List[str], doc_type_idx: Optional[int], official
             break
 
     if not agency_candidates:
-        for line in lines[:20]:
+        for line in lines[:30]:
             clean = _norm_space(line)
             if _looks_like_agency_line(clean):
                 agency_candidates.append(clean)

@@ -7,6 +7,7 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.app.settings import settings
+from src.rag.auto_filter import infer_query_profile
 from src.rag.graph_builder import (
     collect_amendment_source_nodes,
     collect_subtree_nodes,
@@ -137,11 +138,15 @@ def _rrf_merge(rank_lists: List[List[str]], *, k: int = 60) -> Dict[str, float]:
 
 def _sorted_ids_by_score(items: List[Dict[str, Any]], score_key: str) -> List[str]:
     ranked = sorted(items, key=lambda x: float(x.get(score_key, 0.0) or 0.0), reverse=True)
-    return [
-        str(item.get("id") or item.get("node_id") or "")
-        for item in ranked
-        if str(item.get("id") or item.get("node_id") or "")
-    ]
+    out: List[str] = []
+    for item in ranked:
+        score = float(item.get(score_key, 0.0) or 0.0)
+        if score <= 0.0:
+            continue
+        item_id = str(item.get("id") or item.get("node_id") or "")
+        if item_id:
+            out.append(item_id)
+    return out
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -583,6 +588,263 @@ def rank_top_documents_by_official_title(question: str, graph: Dict[str, Any], *
     return scored[: max(1, top_k)], query_signals, topic_phrases
 
 
+
+
+def _hybrid_score(dense: float, bm25: float) -> float:
+    alpha = float(getattr(settings, "hybrid_alpha", 0.55) or 0.55)
+    bm25_norm = min(1.0, float(bm25) / 3.0)
+    return float(alpha * float(dense) + (1.0 - alpha) * bm25_norm)
+
+
+def _route_case(question: str, query_signals: Dict[str, str]) -> Tuple[str, Dict[str, Any]]:
+    profile = infer_query_profile(question)
+    explicit_reference = bool(profile.get("explicit_reference"))
+    has_doc_number = bool(profile.get("has_doc_number")) or bool(query_signals.get("doc_number"))
+    route = str(profile.get("route") or "")
+
+    if explicit_reference or has_doc_number or route in {"direct_reference", "document_focus", "version_change"}:
+        return "TH2", profile
+    return "TH1", profile
+
+
+def _score_docs_via_doc_sketch(question: str, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not docs:
+        return []
+
+    q_vec = _question_embedding(question)
+    texts: List[str] = []
+    items: List[Dict[str, Any]] = []
+
+    for doc in docs:
+        sketch = _norm_space(str(doc.get("doc_sketch") or ""))
+        descriptor = "\n".join(
+            x
+            for x in [
+                f"Số văn bản: {doc.get('doc_number')}",
+                f"Loại văn bản: {doc.get('doc_type')}",
+                f"Tiêu đề: {doc.get('official_title') or doc.get('law_name')}",
+                f"Cơ quan ban hành: {doc.get('issuing_agency') or doc.get('source')}",
+                f"Tóm tắt cấu trúc: {sketch}",
+            ]
+            if _norm_space(x)
+        ).strip()
+        if not descriptor:
+            continue
+        item = dict(doc)
+        item["doc_sketch_descriptor"] = descriptor
+        items.append(item)
+        texts.append(descriptor)
+
+    vecs = _batch_embed_texts(texts, cache=_TEXT_EMBED_CACHE)
+    ranked: List[Dict[str, Any]] = []
+    for item, descriptor in zip(items, texts):
+        key = _text_cache_key(descriptor)
+        dense = _cosine(q_vec, vecs.get(key, []))
+        bm25 = bm25_score(tokenize(question), tokenize(descriptor))
+        item["doc_sketch_dense"] = float(dense)
+        item["doc_sketch_bm25"] = float(bm25)
+        item["doc_sketch_hybrid"] = _hybrid_score(dense, bm25)
+        ranked.append(item)
+
+    ranked.sort(
+        key=lambda x: (
+            float(x.get("doc_sketch_hybrid", 0.0) or 0.0),
+            float(x.get("doc_score", 0.0) or 0.0),
+            float(x.get("metadata_shortlist_score", 0.0) or 0.0),
+        ),
+        reverse=True,
+    )
+    return ranked
+
+
+def _select_doc_for_general_question(question: str, docs: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]], float]:
+    ranked = _score_docs_via_doc_sketch(question, docs)
+    threshold = float(getattr(settings, "doc_sketch_hybrid_threshold", 0.82) or 0.82)
+    if not ranked:
+        return None, [], threshold
+    top_doc = ranked[0]
+    if float(top_doc.get("doc_sketch_hybrid", 0.0) or 0.0) >= threshold:
+        return top_doc, ranked, threshold
+    return None, ranked, threshold
+
+
+def _score_docs_via_bm25_exact(question: str, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    ranked: List[Dict[str, Any]] = []
+    q_tokens = tokenize(question)
+    for doc in docs:
+        descriptor = "\n".join(
+            x
+            for x in [
+                f"Số văn bản: {doc.get('doc_number')}",
+                f"Loại văn bản: {doc.get('doc_type')}",
+                f"Tiêu đề: {doc.get('official_title') or doc.get('law_name')}",
+                f"Cơ quan ban hành: {doc.get('issuing_agency') or doc.get('source')}",
+            ]
+            if _norm_space(x)
+        ).strip()
+        item = dict(doc)
+        item["exact_doc_descriptor"] = descriptor
+        item["exact_doc_bm25"] = float(bm25_score(q_tokens, tokenize(descriptor)))
+        ranked.append(item)
+
+    ranked.sort(
+        key=lambda x: (
+            float(x.get("exact_doc_bm25", 0.0) or 0.0),
+            float(x.get("doc_number_exact", 0.0) or 0.0),
+            float(x.get("agency_exact", 0.0) or 0.0),
+            float(x.get("metadata_shortlist_score", 0.0) or 0.0),
+            float(x.get("doc_score", 0.0) or 0.0),
+        ),
+        reverse=True,
+    )
+    return ranked
+
+
+def _iter_single_doc_passage_nodes(doc: Dict[str, Any], graph: Dict[str, Any]) -> List[str]:
+    node_idx = _node_index(graph)
+    out: List[str] = []
+    seen: Set[str] = set()
+    for node_id in list(doc.get("member_node_ids") or []):
+        node = node_idx.get(str(node_id or ""))
+        if not node:
+            continue
+        art = _artifact_type(node)
+        ntype = _node_type(node)
+        if art == "doc_sketch":
+            continue
+        if art == "article_bundle" or ntype in {"article", "clause", "point", "item", "bullet", "section"}:
+            nid = str(node_id)
+            if nid not in seen:
+                seen.add(nid)
+                out.append(nid)
+    return out
+
+
+def _build_single_doc_passage_candidates(
+    question: str,
+    graph: Dict[str, Any],
+    doc: Dict[str, Any],
+    *,
+    top_k: int,
+) -> List[Dict[str, Any]]:
+    node_idx = _node_index(graph)
+    q_vec = _question_embedding(question)
+    candidates: List[Dict[str, Any]] = []
+
+    for node_id in _iter_single_doc_passage_nodes(doc, graph):
+        node = node_idx.get(node_id)
+        if not node:
+            continue
+
+        md = _node_md(node)
+        parent_id = str(md.get("parent_id") or "").strip()
+        children_ids = [str(x).strip() for x in list(md.get("children_ids") or []) if str(x).strip()][:8]
+
+        source_node_ids: List[str] = []
+        if parent_id and parent_id in node_idx:
+            source_node_ids.append(parent_id)
+        source_node_ids.append(node_id)
+        for cid in children_ids:
+            if cid in node_idx and cid not in source_node_ids:
+                source_node_ids.append(cid)
+
+        text_parts: List[str] = []
+        for sid in source_node_ids:
+            src = node_idx.get(sid)
+            if not src:
+                continue
+            st = _node_text(src)
+            if st:
+                text_parts.append(st)
+
+        merged_text = "\n".join(t for t in text_parts if _norm_space(t)).strip()
+        if not merged_text:
+            continue
+
+        path_title = _path_label(md)
+        retrieval_text = "\n".join(
+            x
+            for x in [
+                f"Văn bản: {doc.get('official_title') or doc.get('law_name')}",
+                f"Số văn bản: {doc.get('doc_number')}",
+                f"Vị trí pháp lý: {path_title}",
+                f"Ngữ cảnh cha-con: {_first_sentences(merged_text, limit=900)}",
+            ]
+            if _norm_space(x)
+        ).strip()
+
+        key = _text_cache_key(retrieval_text)
+        vec = _batch_embed_texts([retrieval_text], cache=_TEXT_EMBED_CACHE).get(key, [])
+        dense = _cosine(q_vec, vec)
+        bm25 = bm25_score(tokenize(question), tokenize(retrieval_text))
+        hybrid = _hybrid_score(dense, bm25)
+
+        candidates.append(
+            {
+                "id": f"{doc.get('doc_id')}::{node_id}",
+                "node_id": node_id,
+                "doc_id": str(doc.get("doc_id") or ""),
+                "doc_key": str(doc.get("doc_id") or ""),
+                "doc_score": float(doc.get("doc_score", 0.0) or 0.0),
+                "text": merged_text,
+                "snippet": _first_sentences(merged_text, limit=320),
+                "retrieval_text": retrieval_text,
+                "rerank_text_short": retrieval_text,
+                "metadata": md,
+                "path_title": path_title,
+                "source_node_ids": source_node_ids,
+                "content_dense": dense,
+                "content_bm25": bm25,
+                "content_hybrid": hybrid,
+            }
+        )
+
+    candidates.sort(key=lambda x: float(x.get("content_hybrid", 0.0) or 0.0), reverse=True)
+    return candidates[: max(1, top_k)]
+
+
+def _exact_doc_route(
+    question: str,
+    graph: Dict[str, Any],
+    docs: List[Dict[str, Any]],
+    *,
+    cross_top_k: int,
+    final_top_k: int,
+) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], bool, Optional[str], List[Dict[str, Any]]]:
+    ranked_docs = _score_docs_via_bm25_exact(question, docs)
+    if not ranked_docs:
+        return None, [], [], True, "no_exact_doc_match", []
+
+    chosen_doc = ranked_docs[0]
+    passage_top_k = int(getattr(settings, "th2_passage_top_k", max(cross_top_k * 3, 12)) or max(cross_top_k * 3, 12))
+    passage_candidates = _build_single_doc_passage_candidates(
+        question,
+        graph,
+        chosen_doc,
+        top_k=passage_top_k,
+    )
+    if not passage_candidates:
+        return chosen_doc, [], [], True, "no_exact_doc_passages", ranked_docs
+
+    reranked = cross_rerank(
+        question,
+        passage_candidates[: max(1, cross_top_k * 3)],
+        top_n=min(max(1, cross_top_k), len(passage_candidates)),
+    )
+    if not reranked:
+        return chosen_doc, passage_candidates, [], True, "cross_empty", ranked_docs
+
+    best_cross = float(reranked[0].get("cross_score", 0.0) or 0.0)
+    min_cross = float(getattr(settings, "cross_rerank_min_score", 0.05) or 0.05)
+    if best_cross < min_cross:
+        return chosen_doc, passage_candidates, [], True, "cross_score_too_low", ranked_docs
+
+    final_passages = [
+        _build_final_bundle_from_grouped_candidate(item, graph)
+        for item in reranked[: max(1, final_top_k)]
+    ]
+    return chosen_doc, passage_candidates, final_passages, False, None, ranked_docs
+
 # =========================
 # Candidate building
 # =========================
@@ -803,7 +1065,64 @@ def _build_final_bundle_from_anchor(candidate: Dict[str, Any], graph: Dict[str, 
     )
     return out
 
+def _build_final_bundle_from_grouped_candidate(candidate: Dict[str, Any], graph: Dict[str, Any]) -> Dict[str, Any]:
+    node_idx = _node_index(graph)
+    md = dict(candidate.get("metadata") or {})
 
+    source_node_ids = _to_node_id_list(candidate.get("source_node_ids") or [])
+    source_node_ids = [nid for nid in source_node_ids if nid in node_idx]
+
+    grouped_text = _norm_space(str(candidate.get("text") or ""))
+    grouped_snippet = _norm_space(str(candidate.get("snippet") or ""))
+    path_title = _norm_space(str(candidate.get("path_title") or _path_label(md) or ""))
+
+    amendment_source_ids: List[str] = []
+    seen_amend: Set[str] = set()
+    for nid in source_node_ids:
+        for sid in _to_node_id_list(collect_amendment_source_nodes(graph, nid)):
+            if sid and sid not in seen_amend:
+                seen_amend.add(sid)
+                amendment_source_ids.append(sid)
+
+    amendment_texts: List[str] = []
+    for sid in amendment_source_ids:
+        src_node = node_idx.get(sid)
+        if not src_node:
+            continue
+        st = _node_text(src_node)
+        if st:
+            amendment_texts.append(st)
+
+    local_parts: List[str] = []
+    if grouped_text:
+        local_parts.append(grouped_text)
+    elif grouped_snippet:
+        local_parts.append(grouped_snippet)
+
+    if amendment_texts:
+        local_parts.append("Nguồn sửa đổi/bổ sung/bãi bỏ liên quan:\n" + "\n".join(amendment_texts))
+
+    expanded_node_ids: List[str] = []
+    seen: Set[str] = set()
+    for nid in source_node_ids + amendment_source_ids:
+        nid = str(nid or "").strip()
+        if nid and nid not in seen:
+            seen.add(nid)
+            expanded_node_ids.append(nid)
+
+    out = dict(candidate)
+    out["expanded_node_ids"] = expanded_node_ids
+    out["local_text"] = "\n\n".join(x for x in local_parts if _norm_space(x)).strip()
+    out["shared_text"] = "\n".join(
+        x
+        for x in [
+            f"Văn bản: {md.get('official_title') or md.get('law_name') or ''}",
+            f"Vị trí: {path_title}",
+        ]
+        if _norm_space(x)
+    ).strip()
+    out["final_score"] = float(candidate.get("cross_score", candidate.get("content_hybrid", 0.0)) or 0.0)
+    return out
 # =========================
 # Routes
 # =========================
@@ -839,7 +1158,6 @@ def _reference_route(
     final_passages = [_build_final_bundle_from_anchor(item, graph) for item in reranked[: max(1, final_top_k)]]
     return ref_candidates, final_passages, False, None, max_reference_hybrid
 
-
 def _content_route(
     question: str,
     graph: Dict[str, Any],
@@ -873,9 +1191,12 @@ def _content_route(
     if best_cross < min_cross:
         return content_candidates, [], True, "cross_score_too_low"
 
-    final_passages = [_build_final_bundle_from_anchor(item, graph) for item in reranked[: max(1, final_top_k)]]
+    # GIỮ NGUYÊN grouped sibling candidate sau rerank, không rebuild lại theo anchor node
+    final_passages = [
+        _build_final_bundle_from_grouped_candidate(item, graph)
+        for item in reranked[: max(1, final_top_k)]
+    ]
     return content_candidates, final_passages, False, None
-
 
 # =========================
 # Public API
@@ -895,7 +1216,6 @@ def retrieve_with_graph(
 
     final_top_k = int(final_top_k or getattr(settings, "final_top_k", 5) or 5)
     cross_top_k = int(cross_top_k or getattr(settings, "cross_top_k", 8) or 8)
-    reference_threshold = float(getattr(settings, "reference_hybrid_threshold", 0.85) or 0.85)
 
     top_docs, query_signals, topic_phrases = rank_top_documents_by_official_title(
         question,
@@ -903,12 +1223,15 @@ def retrieve_with_graph(
         top_k=int(getattr(settings, "doc_top_k", 3) or 3),
     )
 
+    route_case, query_profile = _route_case(question, query_signals)
+
     if not top_docs:
         return {
-            "mode": "content_route",
+            "mode": "no_top_docs",
+            "route_case": route_case,
+            "query_profile": query_profile,
             "topic_phrases": topic_phrases,
-            "reference_threshold": reference_threshold,
-            "max_reference_hybrid": 0.0,
+            "doc_sketch_hybrid_threshold": float(getattr(settings, "doc_sketch_hybrid_threshold", 0.82) or 0.82),
             "rerank_veto": True,
             "veto_reason": "no_top_docs",
             "top_docs": [],
@@ -918,78 +1241,55 @@ def retrieve_with_graph(
             "query_signals": query_signals,
         }
 
-    ref_candidates = _collect_reference_candidates(question, graph, top_docs)
-    max_reference_hybrid = (
-        float(ref_candidates[0].get("reference_hybrid", 0.0) or 0.0)
-        if ref_candidates else 0.0
-    )
-
-    if max_reference_hybrid >= reference_threshold:
-        candidate_pool, final_passages, veto, veto_reason, max_reference_hybrid = _reference_route(
+    if route_case == "TH2":
+        chosen_doc, candidate_pool, final_passages, veto, veto_reason, exact_doc_ranked = _exact_doc_route(
             question,
             graph,
             top_docs,
             cross_top_k=cross_top_k,
             final_top_k=final_top_k,
         )
-        mode = "reference_threshold_route"
-
-        if veto:
-            content_pool, content_passages, content_veto, content_reason = _content_route(
-                question,
-                graph,
-                top_docs,
-                cross_top_k=cross_top_k,
-                final_top_k=final_top_k,
-            )
-            if not content_veto and content_passages:
-                return {
-                    "mode": "content_route",
-                    "topic_phrases": topic_phrases,
-                    "reference_threshold": reference_threshold,
-                    "max_reference_hybrid": max_reference_hybrid,
-                    "rerank_veto": False,
-                    "veto_reason": None,
-                    "top_docs": top_docs,
-                    "candidate_pool": content_pool,
-                    "passages": content_passages,
-                    "insufficient_context": False,
-                    "query_signals": query_signals,
-                }
-            veto_reason = content_reason or veto_reason
-
         return {
-            "mode": mode,
+            "mode": "th2_exact_doc_bm25_route",
+            "route_case": route_case,
+            "query_profile": query_profile,
             "topic_phrases": topic_phrases,
-            "reference_threshold": reference_threshold,
-            "max_reference_hybrid": max_reference_hybrid,
             "rerank_veto": veto,
             "veto_reason": veto_reason,
-            "top_docs": top_docs,
+            "top_docs": [chosen_doc] if chosen_doc else [],
+            "top_docs_initial": top_docs,
+            "exact_doc_ranked": exact_doc_ranked,
             "candidate_pool": candidate_pool,
             "passages": final_passages,
             "insufficient_context": veto or not final_passages,
             "query_signals": query_signals,
         }
 
+    selected_doc, doc_sketch_ranked, doc_sketch_threshold = _select_doc_for_general_question(question, top_docs)
+    docs_for_passages = [selected_doc] if selected_doc else top_docs
+    mode = "th1_doc_sketch_locked_route" if selected_doc else "th1_doc_sketch_fallback_route"
+
     candidate_pool, final_passages, veto, veto_reason = _content_route(
         question,
         graph,
-        top_docs,
+        docs_for_passages,
         cross_top_k=cross_top_k,
         final_top_k=final_top_k,
     )
 
     return {
-        "mode": "content_route",
+        "mode": mode,
+        "route_case": route_case,
+        "query_profile": query_profile,
         "topic_phrases": topic_phrases,
-        "reference_threshold": reference_threshold,
-        "max_reference_hybrid": max_reference_hybrid,
-        "rerank_veto": veto,
-        "veto_reason": veto_reason,
-        "top_docs": top_docs,
+        "doc_sketch_hybrid_threshold": doc_sketch_threshold,
+        "doc_sketch_ranked": doc_sketch_ranked,
+        "top_docs": docs_for_passages,
+        "top_docs_initial": top_docs,
         "candidate_pool": candidate_pool,
         "passages": final_passages,
+        "rerank_veto": veto,
+        "veto_reason": veto_reason,
         "insufficient_context": veto or not final_passages,
         "query_signals": query_signals,
     }

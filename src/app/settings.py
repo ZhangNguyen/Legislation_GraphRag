@@ -51,9 +51,11 @@ class Settings:
     final_top_k: int = _get_int("FINAL_TOP_K", 5)
     cross_top_k: int = _get_int("CROSS_TOP_K", 8)
     reference_hybrid_threshold: float = _get_float("REFERENCE_HYBRID_THRESHOLD", 0.85)
+    doc_sketch_hybrid_threshold: float = _get_float("DOC_SKETCH_HYBRID_THRESHOLD", 0.82)
     cross_rerank_min_score: float = _get_float("CROSS_RERANK_MIN_SCORE", 0.05)
     hybrid_alpha: float = _get_float("HYBRID_ALPHA", 0.55)
     rrf_k: int = _get_int("RRF_K", 60)
+    th2_passage_top_k: int = _get_int("TH2_PASSAGE_TOP_K", 12)
 
     answer_max_context_passages: int = _get_int("ANSWER_MAX_CONTEXT_PASSAGES", 5)
     answer_max_source_items: int = _get_int("ANSWER_MAX_SOURCE_ITEMS", 5)
