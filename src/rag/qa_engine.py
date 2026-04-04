@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import OrderedDict
 from typing import Any, Dict, List
 
@@ -12,41 +13,121 @@ from src.rag.schemas import ChatResponse, SourceItem
 BASE_SYSTEM_PROMPT = """
 Bạn là trợ lý trả lời pháp luật Việt Nam.
 
-Nguyên tắc:
-- Chỉ dựa trên ngữ cảnh đã truy xuất.
-- Trả lời đúng trọng tâm câu hỏi.
-- Nếu nguồn chưa đủ, nói rõ chưa đủ căn cứ.
-- Không suy diễn vượt quá ngữ cảnh.
-- Khi cần, nêu rõ căn cứ thuộc văn bản nào, điều/khoản/điểm nào.
+Nguyên tắc bắt buộc:
+- Chỉ dùng ngữ cảnh đã truy xuất để trả lời.
+- Không bịa thêm thông tin không có trong ngữ cảnh.
+- Nội dung ngữ cảnh có gì thì trả lời đúng theo đó.
+- Không suy diễn vượt quá ngữ cảnh truy xuất.
+- Nếu ngữ cảnh chưa đủ để khẳng định thì phải nói rõ là chưa đủ căn cứ.
+- Khi có thể, nêu căn cứ theo văn bản, điều, khoản, điểm hoặc vị trí tương ứng.
 """.strip()
 
-ROUTE_EXTRA_PROMPTS = {
-    "heading_list": "- Đây là câu hỏi kiểu liệt kê theo heading/phần/điều. Hãy tổng hợp đầy đủ các ý trong cùng điều, không kéo ý từ điều khác nếu không cùng căn cứ.",
-    "version_change": "- Đây là câu hỏi về bãi bỏ/sửa đổi/bổ sung/thay thế/hiệu lực. Hãy xác định đúng văn bản hoặc nội dung bị tác động và nêu căn cứ cụ thể.",
-    "direct_reference": "- Đây là câu hỏi tham chiếu trực tiếp. Hãy trả lời đúng ý được hỏi tại điều/khoản/điểm đó và hạn chế lan sang phần khác.",
-    "condition_circumstance": "- Đây là câu hỏi về điều kiện/trường hợp. Hãy nêu rõ điều kiện hoặc trường hợp áp dụng, rồi dẫn căn cứ.",
-    "factoid": "- Hãy ưu tiên đoạn nào trả lời trực tiếp nhất cho câu hỏi.",
-    "document_focus": "- Người dùng đang hỏi xoay quanh một văn bản cụ thể. Hãy ưu tiên ngữ cảnh của đúng văn bản đó.",
-}
+DOC_SCOPE_SUMMARY_TRIGGERS = [
+    "quy định về vấn đề gì",
+    "quy định về gì",
+    "nói về vấn đề gì",
+    "nói về gì",
+    "điều chỉnh vấn đề gì",
+    "điều chỉnh gì",
+    "về vấn đề gì",
+    "phạm vi điều chỉnh là gì",
+]
 
 
 def _norm_space(text: str) -> str:
     return " ".join((text or "").split()).strip()
 
 
-def _doc_key(metadata: Dict[str, Any]) -> str:
-    return str(metadata.get("doc_id") or metadata.get("law_name") or metadata.get("official_title") or "unknown").strip().lower()
+def _clean_preserve_lines(text: str) -> str:
+    if text is None:
+        return ""
+    lines = []
+    for raw in str(text).splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if line:
+            lines.append(line)
+    return "\n".join(lines).strip()
 
 
-def _group_for_context(passages: List[Dict[str, Any]], max_items: int) -> List[Dict[str, Any]]:
+def _restore_inline_numbered_list(text: str) -> str:
+    raw = _clean_preserve_lines(text)
+    if not raw:
+        return ""
+    restored = re.sub(r"\s+(\d+\.)\s+", r"\n\1 ", raw)
+    restored = re.sub(r"\s+([a-zđ]\))\s+", r"\n\1 ", restored, flags=re.IGNORECASE)
+    return restored.strip()
+
+
+def _postprocess_answer(text: str) -> str:
+    raw = _clean_preserve_lines(text)
+    if not raw:
+        return ""
+    raw = _restore_inline_numbered_list(raw)
+    return raw.strip()
+
+
+def _is_doc_scope_summary_question(question: str) -> bool:
+    q = _norm_space(question).lower()
+    if not q:
+        return False
+    if not any(t in q for t in DOC_SCOPE_SUMMARY_TRIGGERS):
+        return False
+    return any(x in q for x in ["văn bản", "thông tư", "nghị định", "quyết định", "luật", "bộ luật", "nghị quyết"])
+
+
+def _score_passage_for_doc_scope(item: Dict[str, Any]) -> tuple:
+    md = dict(item.get("metadata") or {})
+    artifact = str(md.get("artifact_type") or "").lower()
+    path_title = _norm_space(str(md.get("path_title") or md.get("title") or "")).lower()
+    text = _norm_space(str(item.get("local_text") or item.get("text") or item.get("snippet") or "")).lower()
+    final_score = float(item.get("final_score", 0.0) or 0.0)
+
+    artifact_rank = 0
+    if artifact == "doc_sketch":
+        artifact_rank = 4
+    elif artifact == "article_bundle" and ("điều 1" in path_title or "phạm vi điều chỉnh" in text):
+        artifact_rank = 3
+    elif artifact == "evidence" and ("điều 1" in path_title or "phạm vi điều chỉnh" in text):
+        artifact_rank = 2
+    elif "phạm vi điều chỉnh" in text:
+        artifact_rank = 1
+
+    path_rank = 0
+    if "điều 1" in path_title:
+        path_rank += 2
+    if "phạm vi điều chỉnh" in path_title:
+        path_rank += 2
+
+    text_rank = 0
+    if "phạm vi điều chỉnh" in text:
+        text_rank += 3
+    if text.startswith("điều 1."):
+        text_rank += 1
+
+    return (artifact_rank, path_rank, text_rank, final_score)
+
+
+def _select_passages_for_context(question: str, passages: List[Dict[str, Any]], max_items: int) -> List[Dict[str, Any]]:
+    if not passages:
+        return []
+
+    if _is_doc_scope_summary_question(question):
+        ranked = sorted(passages, key=_score_passage_for_doc_scope, reverse=True)
+        return ranked[: min(2, max_items)]
+
+    return passages[:max_items]
+
+
+def _group_for_context(passages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     grouped: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
-    for p in passages[:max_items]:
+
+    for p in passages:
         md = dict(p.get("metadata") or {})
-        key = _doc_key(md)
+        doc_key = str(p.get("doc_key") or md.get("doc_id") or md.get("official_title") or "unknown")
+
         bucket = grouped.setdefault(
-            key,
+            doc_key,
             {
-                "doc_key": key,
                 "doc_title": md.get("official_title") or md.get("law_name") or "unknown",
                 "doc_type": md.get("doc_type") or md.get("law_type") or "Unknown",
                 "source": md.get("source") or md.get("issuing_agency") or "LocalFile",
@@ -54,7 +135,10 @@ def _group_for_context(passages: List[Dict[str, Any]], max_items: int) -> List[D
                 "doc_best_score": float(p.get("final_score", 0.0) or 0.0),
             },
         )
-        bucket["doc_best_score"] = max(bucket["doc_best_score"], float(p.get("final_score", 0.0) or 0.0))
+        bucket["doc_best_score"] = max(
+            bucket["doc_best_score"],
+            float(p.get("final_score", 0.0) or 0.0),
+        )
         bucket["items"].append(p)
 
     docs = list(grouped.values())
@@ -62,188 +146,128 @@ def _group_for_context(passages: List[Dict[str, Any]], max_items: int) -> List[D
     return docs
 
 
-def _dedup_blocks(texts: List[str]) -> List[str]:
-    seen = set()
-    out: List[str] = []
-    for text in texts:
-        block = _norm_space(text)
-        if not block:
-            continue
-        key = block.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(block)
-    return out
+def _build_context(question: str, passages: List[Dict[str, Any]], max_items: int) -> str:
+    selected = _select_passages_for_context(question, passages, max_items=max_items)
+    docs = _group_for_context(selected)
+    blocks: List[str] = []
 
+    for doc in docs:
+        parts = [
+            f"Văn bản: {doc['doc_title']}",
+            f"Loại: {doc['doc_type']}",
+            f"Nguồn: {doc['source']}",
+        ]
 
-def _build_context(passages: List[Dict[str, Any]], max_items: int) -> str:
-    groups = _group_for_context(passages, max_items)
-    lines: List[str] = []
-    for idx, group in enumerate(groups, start=1):
-        lines.append(f"[Nguồn {idx}] {group['doc_type']} | {group['doc_title']} | source={group['source']}")
-        shared_blocks = _dedup_blocks([str(item.get("shared_text") or "") for item in group["items"]])
-        if shared_blocks:
-            lines.append("[Ngữ cảnh chung của văn bản]")
-            for block in shared_blocks:
-                lines.append(block)
-        for j, item in enumerate(group["items"], start=1):
+        for idx, item in enumerate(doc["items"], start=1):
             md = dict(item.get("metadata") or {})
-            lines.append(
-                f"  - [Passage {idx}.{j}] artifact={md.get('artifact_type') or '-'} | path={md.get('path_title') or '-'} | article={md.get('article') or '-'} | clause={md.get('clause') or '-'} | point={md.get('point') or '-'}"
+            path_title = _norm_space(str(md.get("path_title") or md.get("title") or ""))
+            shared_text = _clean_preserve_lines(str(item.get("shared_text") or ""))
+            local_text = _restore_inline_numbered_list(
+                str(item.get("local_text") or item.get("text") or item.get("snippet") or "")
             )
-            local_text = str(item.get("local_text") or item.get("bundle_text") or item.get("retrieval_text") or item.get("text") or "")
-            lines.append(f"    {local_text}")
-        lines.append("")
-    return "\n".join(lines).strip()
+
+            section_bits: List[str] = [f"[Đoạn {idx}]"]
+
+            if path_title:
+                section_bits.append(f"Vị trí: {path_title}")
+            if shared_text:
+                section_bits.append(shared_text)
+            if local_text:
+                section_bits.append(local_text)
+
+            parts.append("\n".join(section_bits))
+
+        blocks.append("\n".join(parts))
+
+    return "\n\n" + ("\n\n---\n\n".join(blocks) if blocks else "")
 
 
-def _to_source_item(p: Dict[str, Any]) -> SourceItem:
-    md = dict(p.get("metadata") or {})
-    snippet = str(p.get("local_text") or p.get("bundle_text") or p.get("retrieval_text") or p.get("text") or p.get("snippet") or "")[:500]
-    return SourceItem(
-        chunk_id=str(md.get("chunk_id") or md.get("node_id") or p.get("node_id") or ""),
-        law_name=str(md.get("official_title") or md.get("law_name") or ""),
-        law_type=str(md.get("doc_type") or md.get("law_type") or "Unknown"),
-        year=int(md.get("year") or 0),
-        source=str(md.get("source") or md.get("issuing_agency") or ""),
-        article=md.get("article"),
-        snippet=snippet,
-    )
-
-
-def _same_article_focus(passages: List[Dict[str, Any]]) -> bool:
-    articles = {
-        _norm_space(str((p.get("metadata") or {}).get("article") or ""))
-        for p in passages
-        if _norm_space(str((p.get("metadata") or {}).get("article") or ""))
-    }
-    return len(articles) == 1 and bool(articles)
-
-
-def _extract_doc_numbers(text: str) -> List[str]:
-    import re
+def _build_sources(question: str, passages: List[Dict[str, Any]], max_items: int) -> List[SourceItem]:
+    selected = _select_passages_for_context(question, passages, max_items=max_items)
+    out: List[SourceItem] = []
     seen = set()
-    out: List[str] = []
-    for m in re.finditer(r"\b\d{1,4}/\d{4}/[A-ZĐ\-]+\b", str(text or "").upper()):
-        value = _norm_space(m.group(0)).upper()
-        if value in seen:
+
+    for p in selected:
+        md = dict(p.get("metadata") or {})
+        chunk_id = str(p.get("node_id") or md.get("chunk_id") or md.get("node_id") or "")
+        if not chunk_id or chunk_id in seen:
             continue
-        seen.add(value)
-        out.append(value)
+        seen.add(chunk_id)
+
+        out.append(
+            SourceItem(
+                chunk_id=chunk_id,
+                law_name=str(md.get("official_title") or md.get("law_name") or "unknown"),
+                law_type=str(md.get("doc_type") or md.get("law_type") or "Unknown"),
+                year=int(md.get("year") or 0),
+                source=str(md.get("source") or md.get("issuing_agency") or "LocalFile"),
+                article=str(md.get("article") or "") or None,
+                snippet=str(p.get("snippet") or p.get("text") or "")[:700],
+            )
+        )
+
     return out
 
 
-def _build_no_passage_fallback(question: str, retrieval_result: Dict[str, Any], query_profile: Dict[str, Any]) -> str:
-    route = str(query_profile.get("route") or "factoid")
-    filters = retrieval_result.get("filters") or query_profile.get("filters") or {}
-    seed_candidates = retrieval_result.get("seed_candidates") or []
-    doc_seed_stage = str((query_profile.get("document_seed_stage") or "none")).strip()
-
-    if route == "version_change" and seed_candidates:
-        source_doc = str(filters.get("doc_number") or "").upper().strip()
-        top = dict(seed_candidates[0] or {})
-        text = "\n".join(
-            str(top.get(k) or "") for k in ["title_block", "lead_block", "doc_sketch", "text", "law_name"]
-        )
-        candidates = [x for x in _extract_doc_numbers(text) if x and x != source_doc]
-        if candidates:
-            joined = ", ".join(candidates[:3])
-            return (
-                f"Tạm thời chưa trích được passage xác nhận, nhưng từ văn bản nguồn đã nhận diện được, văn bản bị tác động nhiều khả năng là {joined}. "
-                f"Hệ thống đang dừng ở tầng retrieval nên nên kiểm tra lại pipeline document_seed[{doc_seed_stage}] và passage extraction."
-            )
-
-    if filters.get("doc_number") or filters.get("law_type"):
-        bits = []
-        if filters.get("law_type"):
-            bits.append(str(filters.get("law_type")))
-        if filters.get("doc_number"):
-            bits.append(str(filters.get("doc_number")))
-        target = " ".join(bits).strip()
-        return (
-            f"Hệ thống đã nhận diện truy vấn nhắm tới {target or 'một văn bản cụ thể'}, nhưng chưa lấy ra được passage phù hợp từ retrieval. "
-            f"Tầng document seed hiện tại: {doc_seed_stage}."
-        )
-
-    return "Chưa tìm thấy ngữ cảnh phù hợp để trả lời câu hỏi này trong dữ liệu hiện có."
-
-
-def build_chat_response(
-    question: str,
-    passages: List[Dict[str, Any]],
-    *,
-    max_context_passages: int | None = None,
-    max_source_items: int | None = None,
-    response_mode: str | None = None,
-    query_profile: Dict[str, Any] | None = None,
-    retrieval_result: Dict[str, Any] | None = None,
-) -> ChatResponse:
-    _ = response_mode
-    query_profile = query_profile or {}
-    if not passages:
-        answer = _build_no_passage_fallback(question, retrieval_result or {}, query_profile)
-        return ChatResponse(answer=answer, sources=[])
-
-    route = str(query_profile.get("route") or "factoid")
-    max_context_passages = max_context_passages or settings.answer_max_context_passages
-    max_source_items = max_source_items or settings.answer_max_source_items
-    context = _build_context(passages, max_context_passages)
-
-    route_extra = ROUTE_EXTRA_PROMPTS.get(route, "")
-    same_article_hint = ""
-    if route == "heading_list" and not _same_article_focus(passages):
-        same_article_hint = "- Cảnh báo: ngữ cảnh đang có khả năng lẫn nhiều điều. Nếu chưa đủ chắc chắn cùng một điều, hãy nói rõ chưa đủ căn cứ."
-
-    prompt = f"""
-Câu hỏi người dùng:
-{question}
-
-Loại truy vấn:
-{route}
-
-Ngữ cảnh đã truy xuất:
-{context}
-
-Yêu cầu:
-- Trả lời trực tiếp và bám sát câu hỏi.
-- Ưu tiên nguồn nào sát nhất.
-- Nếu thiếu căn cứ thì nói rõ.
-{route_extra}
-{same_article_hint}
+def _build_user_prompt(question: str, context: str) -> str:
+    if _is_doc_scope_summary_question(question):
+        extra = """
+Yêu cầu bổ sung cho loại câu hỏi này:
+- Đây là câu hỏi hỏi chủ đề hoặc phạm vi chính của văn bản.
+- Ưu tiên trả lời gọn trong 1 câu nếu ngữ cảnh đã đủ rõ.
+- Chỉ nêu nội dung chính của văn bản.
+- Không mở rộng sang các điều khoản chi tiết khác nếu câu hỏi không yêu cầu.
+""".strip()
+    else:
+        extra = """
+Yêu cầu bổ sung:
+- Trả lời dựa hoàn toàn trên ngữ cảnh truy xuất.
+- Không thêm thông tin ngoài ngữ cảnh.
+- Không cần cố rút gọn.
+- Không cần ép buộc theo mẫu liệt kê hay trả lời ngắn.
+- Trình bày tự nhiên, miễn là bám sát ngữ cảnh.
+- Nếu ngữ cảnh chỉ nói được đến đâu thì trả lời đúng đến đó.
 """.strip()
 
+    return f"""
+Câu hỏi:
+{question}
+
+Ngữ cảnh:
+{context}
+
+{extra}
+
+Nếu có thể, nêu căn cứ theo văn bản và vị trí tương ứng.
+""".strip()
+
+
+def answer_with_rag(question: str, retrieval_result: Dict[str, Any]) -> ChatResponse:
+    passages = list(retrieval_result.get("passages") or [])
+    insufficient = bool(retrieval_result.get("insufficient_context"))
+
+    if insufficient or not passages:
+        return ChatResponse(
+            answer="Ngữ cảnh truy xuất hiện tại chưa đủ căn cứ để trả lời chính xác câu hỏi này.",
+            sources=[],
+        )
+
+    context = _build_context(question, passages, max_items=settings.answer_max_context_passages)
+    user_prompt = _build_user_prompt(question, context)
+
     llm = get_llm()
-    response = llm.invoke([
-        SystemMessage(content=BASE_SYSTEM_PROMPT),
-        HumanMessage(content=prompt),
-    ])
-    answer = _norm_space(getattr(response, "content", "") or "")
+    resp = llm.invoke(
+        [
+            SystemMessage(content=BASE_SYSTEM_PROMPT),
+            HumanMessage(content=user_prompt),
+        ]
+    )
+
+    answer = _postprocess_answer(getattr(resp, "content", "") or "")
     if not answer:
-        answer = "Chưa tạo được câu trả lời từ ngữ cảnh đã truy xuất."
+        answer = "Chưa đủ căn cứ để trả lời chính xác từ ngữ cảnh hiện có."
 
-    sources: List[SourceItem] = []
-    seen = set()
-    for p in passages[:max_source_items]:
-        src = _to_source_item(p)
-        key = (src.chunk_id, src.source, src.article)
-        if key in seen:
-            continue
-        seen.add(key)
-        sources.append(src)
-
-    return ChatResponse(answer=answer, sources=sources)
-
-
-def answer_with_rag(question: str, retrieval_result: Dict[str, Any], *, response_mode: str | None = None) -> ChatResponse:
-    retrieval_result = retrieval_result or {}
-    passages = retrieval_result.get("passages", []) or []
-    return build_chat_response(
-        question=question,
-        passages=passages,
-        max_context_passages=retrieval_result.get("final_top_k"),
-        max_source_items=retrieval_result.get("final_top_k"),
-        response_mode=response_mode or retrieval_result.get("mode"),
-        query_profile=retrieval_result.get("query_profile") or {},
-        retrieval_result=retrieval_result,
+    return ChatResponse(
+        answer=answer,
+        sources=_build_sources(question, passages, max_items=settings.answer_max_source_items),
     )
