@@ -10,7 +10,7 @@ from src.rag.hybrid import tokenize
 from src.utils.loader import load_document
 
 
-ARTIFACTS_FOR_BM25 = {"evidence", "article_bundle", "doc_sketch"}
+ARTIFACTS_FOR_BM25 = {"evidence", "article_bundle", "section_bundle", "doc_sketch"}
 
 
 def iter_chunk_texts_from_normalized(
