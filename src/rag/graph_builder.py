@@ -217,7 +217,7 @@ def _build_doc_index(graph: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         if artifact == "doc_sketch":
             doc["doc_sketch"] = str(node.get("text") or md.get("retrieval_text") or "")
             doc["doc_sketch_node_id"] = node_id
-        elif artifact in {"evidence", "article_bundle"}:
+        elif artifact in {"evidence", "article_bundle", "section_bundle"}:
             doc["evidence_node_ids"].append(node_id)
             if _is_reference_capable(node):
                 doc["reference_node_ids"].append(node_id)

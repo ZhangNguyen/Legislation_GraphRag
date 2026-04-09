@@ -351,6 +351,16 @@ def build_chunks(parsed: ParsedLegalDocument) -> List[dict]:
     node_index = {node.node_id: node for node in nodes}
     chunks: List[dict] = []
     article_nodes: List[LegalNode] = [n for n in nodes if n.node_type == "article"]
+    section_bundle_roots: List[LegalNode] = []
+    for n in nodes:
+        if n.node_type == "item" and n.children_ids:
+            section_bundle_roots.append(n)
+            continue
+        if n.node_type == "section" and n.children_ids:
+            child_nodes = [node_index[cid] for cid in n.children_ids if cid in node_index]
+            if any(ch.node_type in {"item", "point", "bullet"} for ch in child_nodes):
+                section_bundle_roots.append(n)
+
 
     for node in nodes:
         if node.node_type == "document":
@@ -464,6 +474,71 @@ def build_chunks(parsed: ParsedLegalDocument) -> List[dict]:
             }
         )
 
+    section_bundle_ids: List[str] = []
+    for root in section_bundle_roots:
+        descendant_ids = _descendant_ids(root.node_id, node_index)
+        source_ids = [root.node_id] + descendant_ids
+        source_nodes = [node_index[nid] for nid in source_ids if nid in node_index]
+        bundle_lines = [_norm_space(n.text) for n in source_nodes if _norm_space(n.text)]
+        bundle_text = "\n".join(bundle_lines).strip()
+        if not bundle_text:
+            continue
+        bundle_id = f"{root.node_id}::section_bundle"
+        section_bundle_ids.append(bundle_id)
+        metadata = {
+            "artifact_type": "section_bundle",
+            "doc_id": header.doc_id,
+            "node_id": bundle_id,
+            "chunk_id": bundle_id,
+            "node_type": "section_bundle",
+            "title": root.label,
+            "heading_title": root.label,
+            "path_title": root.path_title or root.label,
+            "article": root.article,
+            "clause": root.clause,
+            "point": root.point,
+            "item": root.item,
+            "parent_id": None,
+            "children_ids": [],
+            "sibling_ids": [],
+            "source_node_ids": source_ids,
+            "doc_type": header.doc_type or "Unknown",
+            "official_title": header.official_title or header.file_stem,
+            "issuing_agency": header.issuing_agency,
+            "doc_number": header.doc_number,
+            "date_raw": header.date_raw,
+            "year": header.year or 0,
+            "law_name": header.official_title or header.file_stem,
+            "law_type": header.doc_type or "Unknown",
+            "source": header.issuing_agency or "LocalFile",
+            "file_stem": header.file_stem,
+            "order_index": root.order_index,
+            "level": root.level,
+        }
+        retrieval_text = "\n".join(
+            [
+                f"Văn bản: {header.official_title or header.file_stem}",
+                f"Mục/Nhóm ý: {root.path_title or root.label}",
+                f"Nội dung nhóm: {bundle_text}",
+            ]
+        ).strip()
+        rerank_text = "\n".join(
+            [
+                f"Văn bản: {header.official_title or header.file_stem}",
+                f"Vị trí pháp lý: {root.path_title or root.label}",
+                f"Nội dung nhóm: {_truncate(bundle_text, 1800)}",
+            ]
+        ).strip()
+        chunks.append(
+            {
+                "text": bundle_text,
+                "snippet": _truncate(bundle_text, 700),
+                "retrieval_text": retrieval_text,
+                "rerank_text": rerank_text,
+                "metadata": metadata,
+            }
+        )
+
     doc_sketch_id = f"{header.doc_id}::doc_sketch"
     article_labels = [article.label for article in article_nodes]
     doc_sketch_text = _doc_sketch_text(header, article_labels)
@@ -483,7 +558,7 @@ def build_chunks(parsed: ParsedLegalDocument) -> List[dict]:
             "parent_id": None,
             "children_ids": [],
             "sibling_ids": [],
-            "source_node_ids": article_bundle_ids,
+            "source_node_ids": article_bundle_ids + section_bundle_ids,
             "doc_type": header.doc_type or "Unknown",
             "official_title": header.official_title or header.file_stem,
             "issuing_agency": header.issuing_agency,
