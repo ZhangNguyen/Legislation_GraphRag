@@ -82,6 +82,10 @@
     .doc-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .doc-item { text-align: left; width: 100%; }
     .preview-box { min-height: 340px; max-height: 520px; overflow: auto; white-space: pre-wrap; line-height: 1.4; background: #0f1629; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 10px; }
+    .viewer-shell { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; background: #0f1629; min-height: 420px; overflow: hidden; }
+    .doc-frame { width: 100%; height: 520px; border: 0; background: #fff; }
+    .doc-html-viewer { padding: 20px 24px; line-height: 1.65; background: #f7f8fc; color: #17213d; min-height: 420px; white-space: normal; }
+    .doc-html-viewer h4 { margin: 0 0 12px; }
     @media (max-width: 900px) { .user-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -131,6 +135,7 @@
           <p class="subtitle">Bấm vào tên file để xem nhanh nội dung ở khung bên dưới.</p>
           <div id="randomDocList" class="doc-list"></div>
           <div id="docPreview" class="preview-box">Chọn một file để xem nhanh nội dung.</div>
+          <div id="docViewer" class="viewer-shell"></div>
         </div>
       </div>
     </div>
@@ -206,8 +211,10 @@
     async function loadRandomDocuments() {
       const listEl = document.getElementById('randomDocList');
       const previewEl = document.getElementById('docPreview');
+      const viewerEl = document.getElementById('docViewer');
       listEl.innerHTML = '';
       previewEl.textContent = 'Đang tải danh sách văn bản...';
+      viewerEl.innerHTML = '';
 
       try {
         const res = await fetch('/api/documents/random?limit=5');
@@ -223,7 +230,7 @@
           const btn = document.createElement('button');
           btn.className = 'doc-item ghost';
           btn.textContent = `${item.filename} (${item.suffix})`;
-          btn.onclick = () => loadDocumentPreview(item.filename);
+          btn.onclick = () => loadDocumentPreview(item.filename, item.suffix);
           listEl.appendChild(btn);
         });
 
@@ -233,7 +240,58 @@
       }
     }
 
-    async function loadDocumentPreview(filename) {
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('\"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function renderDocumentViewer(item, data) {
+      const viewerEl = document.getElementById('docViewer');
+      const suffix = (item.suffix || '').toLowerCase();
+      const fileUrl = `/api/documents/file?filename=${encodeURIComponent(item.filename)}`;
+
+      if (suffix === '.pdf') {
+        viewerEl.innerHTML = `<iframe class="doc-frame" src="${fileUrl}#toolbar=1&navpanes=1"></iframe>`;
+        return;
+      }
+
+      if (suffix === '.docx') {
+        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(item.filename)}</h4>
+            <div>${htmlBody}</div>
+          </div>
+        `;
+        return;
+      }
+
+      if (suffix === '.doc') {
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(item.filename)}</h4>
+            <p>File .doc (Word 97-2003) không render chuẩn trong browser.</p>
+            <p>Hệ thống đang ưu tiên lấy .docx khi có cùng tên để tránh trùng lặp.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+      viewerEl.innerHTML = `
+        <div class="doc-html-viewer">
+          <h4>${escapeHtml(item.filename)}</h4>
+          <div>${htmlBody}</div>
+        </div>
+      `;
+    }
+
+    async function loadDocumentPreview(filename, suffix = null) {
       const previewEl = document.getElementById('docPreview');
       previewEl.textContent = 'Đang tải nội dung xem nhanh...';
 
@@ -241,6 +299,7 @@
         const res = await fetch(`/api/documents/preview?filename=${encodeURIComponent(filename)}`);
         const data = await res.json();
         previewEl.textContent = data.preview || '(Không có nội dung)';
+        renderDocumentViewer({ filename, suffix: suffix || data.suffix || '' }, data);
       } catch (err) {
         previewEl.textContent = `Lỗi tải nội dung file: ${err}`;
       }
