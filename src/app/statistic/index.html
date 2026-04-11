@@ -82,6 +82,10 @@
     .doc-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .doc-item { text-align: left; width: 100%; }
     .preview-box { min-height: 340px; max-height: 520px; overflow: auto; white-space: pre-wrap; line-height: 1.4; background: #0f1629; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 10px; }
+    .viewer-shell { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; background: #0f1629; min-height: 420px; overflow: hidden; }
+    .doc-frame { width: 100%; height: 520px; border: 0; background: #fff; }
+    .doc-html-viewer { padding: 20px 24px; line-height: 1.65; background: #f7f8fc; color: #17213d; min-height: 420px; white-space: normal; }
+    .doc-html-viewer h4 { margin: 0 0 12px; }
     @media (max-width: 900px) { .user-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -131,6 +135,7 @@
           <p class="subtitle">Bấm vào tên file để xem nhanh nội dung ở khung bên dưới.</p>
           <div id="randomDocList" class="doc-list"></div>
           <div id="docPreview" class="preview-box">Chọn một file để xem nhanh nội dung.</div>
+          <div id="docViewer" class="viewer-shell"></div>
         </div>
       </div>
     </div>
@@ -175,6 +180,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/docx-preview@0.3.3/dist/docx-preview.min.js"></script>
   <script>
     function openRole(role) {
       document.getElementById('landing').classList.add('hidden');
@@ -206,8 +212,10 @@
     async function loadRandomDocuments() {
       const listEl = document.getElementById('randomDocList');
       const previewEl = document.getElementById('docPreview');
+      const viewerEl = document.getElementById('docViewer');
       listEl.innerHTML = '';
       previewEl.textContent = 'Đang tải danh sách văn bản...';
+      viewerEl.innerHTML = '';
 
       try {
         const res = await fetch('/api/documents/random?limit=5');
@@ -223,7 +231,7 @@
           const btn = document.createElement('button');
           btn.className = 'doc-item ghost';
           btn.textContent = `${item.filename} (${item.suffix})`;
-          btn.onclick = () => loadDocumentPreview(item.filename);
+          btn.onclick = () => loadDocumentPreview(item.filename, item.suffix);
           listEl.appendChild(btn);
         });
 
@@ -233,7 +241,100 @@
       }
     }
 
-    async function loadDocumentPreview(filename) {
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('\"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    async function renderDocxWithLibrary(fileUrl, filename, data) {
+      const viewerEl = document.getElementById('docViewer');
+
+      if (!window.docx || typeof window.docx.renderAsync !== 'function') {
+        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(filename)}</h4>
+            <p>Không tải được thư viện DOCX viewer, hiển thị bản fallback:</p>
+            <div>${htmlBody}</div>
+          </div>
+        `;
+        return;
+      }
+
+      viewerEl.innerHTML = `<div class="doc-html-viewer" id="docxRenderRoot"><h4>${escapeHtml(filename)}</h4><div>Đang render file DOCX...</div></div>`;
+
+      const renderRoot = document.getElementById('docxRenderRoot');
+      try {
+        const fileRes = await fetch(fileUrl);
+        if (!fileRes.ok) {
+          throw new Error(`HTTP ${fileRes.status}`);
+        }
+
+        const fileBuffer = await fileRes.arrayBuffer();
+        renderRoot.innerHTML = '';
+        await window.docx.renderAsync(fileBuffer, renderRoot, null, {
+          className: 'docx',
+          inWrapper: false,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          useBase64URL: true,
+        });
+      } catch (error) {
+        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(filename)}</h4>
+            <p>Render DOCX lỗi (${escapeHtml(error)}), hiển thị fallback:</p>
+            <div>${htmlBody}</div>
+          </div>
+        `;
+      }
+    }
+
+    async function renderDocumentViewer(item, data) {
+      const viewerEl = document.getElementById('docViewer');
+      const suffix = (item.suffix || '').toLowerCase();
+      const fileUrl = `/api/documents/file?filename=${encodeURIComponent(item.filename)}`;
+
+      if (suffix === '.pdf') {
+        viewerEl.innerHTML = `<iframe class="doc-frame" src="${fileUrl}#toolbar=1&navpanes=1"></iframe>`;
+        return;
+      }
+
+      if (suffix === '.docx') {
+        await renderDocxWithLibrary(fileUrl, item.filename, data);
+        return;
+      }
+
+      if (suffix === '.doc') {
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(item.filename)}</h4>
+            <p>File .doc (Word 97-2003) không render chuẩn trực tiếp trên web.</p>
+            <p>Hệ thống đã ưu tiên lấy .docx để mở đẹp như file gốc khi có cùng tên.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+      viewerEl.innerHTML = `
+        <div class="doc-html-viewer">
+          <h4>${escapeHtml(item.filename)}</h4>
+          <div>${htmlBody}</div>
+        </div>
+      `;
+    }
+
+    async function loadDocumentPreview(filename, suffix = null) {
       const previewEl = document.getElementById('docPreview');
       previewEl.textContent = 'Đang tải nội dung xem nhanh...';
 
@@ -241,6 +342,7 @@
         const res = await fetch(`/api/documents/preview?filename=${encodeURIComponent(filename)}`);
         const data = await res.json();
         previewEl.textContent = data.preview || '(Không có nội dung)';
+        await renderDocumentViewer({ filename, suffix: suffix || data.suffix || '' }, data);
       } catch (err) {
         previewEl.textContent = `Lỗi tải nội dung file: ${err}`;
       }
