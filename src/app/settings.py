@@ -42,6 +42,7 @@ class Settings:
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "legal_chunks")
 
     normalized_dir: str = os.getenv("NORMALIZED_DIR", "data/normalized")
+    raw_dir: str = os.getenv("RAW_DIR", "data/raw")
     normalized_glob: str = os.getenv("NORMALIZED_GLOB", "*.*")
     graph_snapshot_path: str = os.getenv("GRAPH_SNAPSHOT_PATH", "outputs/runtime/runtime_graph_snapshot.json")
     bm25_stats_path: str = os.getenv("BM25_STATS_PATH", "outputs/bm25/bm25_stats.json")
