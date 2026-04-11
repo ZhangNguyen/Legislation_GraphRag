@@ -77,6 +77,12 @@
     .msg-user { align-self: flex-end; background: #29407a; border: 1px solid #3f5fb0; }
     .msg-bot { align-self: flex-start; background: #15213b; border: 1px solid var(--border); }
     .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+    .user-layout { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(340px, 1fr); gap: 12px; margin-top: 12px; }
+    .doc-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .doc-item { text-align: left; width: 100%; }
+    .preview-box { min-height: 340px; max-height: 520px; overflow: auto; white-space: pre-wrap; line-height: 1.4; background: #0f1629; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 10px; }
+    @media (max-width: 900px) { .user-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -94,24 +100,38 @@
     </div>
 
     <div id="userPanel" class="hidden">
-      <div class="card">
-        <div class="row" style="justify-content:space-between; align-items:center;">
-          <h2>User Chat</h2>
-          <div>
-            <span class="tag">User mode</span>
-            <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
+      <div class="user-layout">
+        <div>
+          <div class="card">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+              <h2>User Chat</h2>
+              <div>
+                <span class="tag">User mode</span>
+                <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
+              </div>
+            </div>
+            <p class="subtitle">Chỉ nhập câu hỏi pháp luật. Các tham số retrieval dùng cấu hình server (.env).</p>
+
+            <label for="userQuestion">Câu hỏi</label>
+            <textarea id="userQuestion" placeholder="Ví dụ: Điều kiện xử phạt theo Điều 77 là gì?"></textarea>
+            <button class="primary" onclick="sendUserChat()">Gửi câu hỏi</button>
+          </div>
+
+          <div class="card">
+            <h3>Hội thoại</h3>
+            <div id="userChatThread" class="chat-thread"></div>
           </div>
         </div>
-        <p class="subtitle">Chỉ nhập câu hỏi pháp luật. Các tham số retrieval dùng cấu hình server (.env).</p>
 
-        <label for="userQuestion">Câu hỏi</label>
-        <textarea id="userQuestion" placeholder="Ví dụ: Điều kiện xử phạt theo Điều 77 là gì?"></textarea>
-        <button class="primary" onclick="sendUserChat()">Gửi câu hỏi</button>
-      </div>
-
-      <div class="card">
-        <h3>Hội thoại</h3>
-        <div id="userChatThread" class="chat-thread"></div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <h3>5 văn bản pháp luật ngẫu nhiên</h3>
+            <button onclick="loadRandomDocuments()">Làm mới</button>
+          </div>
+          <p class="subtitle">Bấm vào tên file để xem nhanh nội dung ở khung bên dưới.</p>
+          <div id="randomDocList" class="doc-list"></div>
+          <div id="docPreview" class="preview-box">Chọn một file để xem nhanh nội dung.</div>
+        </div>
       </div>
     </div>
 
@@ -160,6 +180,7 @@
       document.getElementById('landing').classList.add('hidden');
       document.getElementById('userPanel').classList.toggle('hidden', role !== 'user');
       document.getElementById('adminPanel').classList.toggle('hidden', role !== 'admin');
+      if (role === 'user') loadRandomDocuments();
     }
 
     function backToLanding() {
@@ -179,6 +200,50 @@
 
     function printAdmin(data) {
       document.getElementById('adminOutput').textContent = JSON.stringify(data, null, 2);
+    }
+
+
+    async function loadRandomDocuments() {
+      const listEl = document.getElementById('randomDocList');
+      const previewEl = document.getElementById('docPreview');
+      listEl.innerHTML = '';
+      previewEl.textContent = 'Đang tải danh sách văn bản...';
+
+      try {
+        const res = await fetch('/api/documents/random?limit=5');
+        const data = await res.json();
+        const items = data.items || [];
+
+        if (!items.length) {
+          previewEl.textContent = 'Không có file trong data/raw hoặc chưa hỗ trợ định dạng.';
+          return;
+        }
+
+        items.forEach((item) => {
+          const btn = document.createElement('button');
+          btn.className = 'doc-item ghost';
+          btn.textContent = `${item.filename} (${item.suffix})`;
+          btn.onclick = () => loadDocumentPreview(item.filename);
+          listEl.appendChild(btn);
+        });
+
+        previewEl.textContent = 'Danh sách đã được làm mới. Hãy chọn 1 file để xem nhanh nội dung.';
+      } catch (err) {
+        previewEl.textContent = `Lỗi tải danh sách file: ${err}`;
+      }
+    }
+
+    async function loadDocumentPreview(filename) {
+      const previewEl = document.getElementById('docPreview');
+      previewEl.textContent = 'Đang tải nội dung xem nhanh...';
+
+      try {
+        const res = await fetch(`/api/documents/preview?filename=${encodeURIComponent(filename)}`);
+        const data = await res.json();
+        previewEl.textContent = data.preview || '(Không có nội dung)';
+      } catch (err) {
+        previewEl.textContent = `Lỗi tải nội dung file: ${err}`;
+      }
     }
 
     async function sendUserChat() {
