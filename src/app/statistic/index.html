@@ -311,6 +311,91 @@
       } catch (err) {
         statusEl.textContent = `Lỗi tải danh sách file: ${err}`;
       }
+
+      viewerEl.innerHTML = `
+        <div class="docx-zoom-container">
+          <div class="docx-zoom-content" id="docxZoomRoot">
+            <div class="doc-html-viewer" id="docxRenderRoot"><h4>${escapeHtml(filename)}</h4><div>Đang render file DOCX...</div></div>
+          </div>
+        </div>
+      `;
+
+      const renderRoot = document.getElementById('docxRenderRoot');
+      try {
+        const fileRes = await fetch(fileUrl);
+        if (!fileRes.ok) {
+          throw new Error(`HTTP ${fileRes.status}`);
+        }
+
+        const fileBuffer = await fileRes.arrayBuffer();
+        renderRoot.innerHTML = '';
+        await window.docx.renderAsync(fileBuffer, renderRoot, null, {
+          className: 'docx',
+          inWrapper: false,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          useBase64URL: true,
+        });
+        applyViewerZoom();
+      } catch (error) {
+        setViewerMode('default');
+        activeViewerType = 'fallback';
+        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(filename)}</h4>
+            <p>Render DOCX lỗi (${escapeHtml(error)}), hiển thị fallback:</p>
+            <div>${htmlBody}</div>
+          </div>
+        `;
+      }
+    }
+
+    async function renderDocumentViewer(item, data) {
+      const viewerEl = document.getElementById('docViewer');
+      const statusEl = document.getElementById('docStatus');
+      const suffix = (item.suffix || '').toLowerCase();
+      const fileUrl = `/api/documents/file?filename=${encodeURIComponent(item.filename)}`;
+      statusEl.textContent = `Đang mở: ${item.filename}`;
+
+      if (suffix === '.pdf') {
+        setViewerMode('default');
+        activeViewerType = 'pdf';
+        viewerEl.innerHTML = `<iframe class="doc-frame" src="${fileUrl}#toolbar=1&navpanes=1"></iframe>`;
+        resetViewerZoom();
+        return;
+      }
+
+      if (suffix === '.docx') {
+        await renderDocxWithLibrary(fileUrl, item.filename, data);
+        return;
+      }
+
+      if (suffix === '.doc') {
+        setViewerMode('default');
+        activeViewerType = 'fallback';
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(item.filename)}</h4>
+            <p>File .doc (Word 97-2003) không render chuẩn trực tiếp trên web.</p>
+            <p>Hệ thống đã ưu tiên lấy .docx để mở đẹp như file gốc khi có cùng tên.</p>
+          </div>
+        `;
+        return;
+      }
+
+      setViewerMode('default');
+      activeViewerType = 'fallback';
+      const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+      viewerEl.innerHTML = `
+        <div class="doc-html-viewer">
+          <h4>${escapeHtml(item.filename)}</h4>
+          <div>${htmlBody}</div>
+        </div>
+      `;
     }
 
 
