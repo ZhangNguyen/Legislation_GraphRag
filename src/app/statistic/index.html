@@ -148,10 +148,12 @@
                 <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
               </div>
             </div>
-            <p class="subtitle">Chỉ nhập câu hỏi pháp luật. Các tham số retrieval dùng cấu hình server (.env).</p>
-
+            <p class="subtitle">Hãy hỏi các câu hỏi pháp luật trong văn bản hiển thị. Khuyến cáo: Mỗi câu hỏi nên đi kèm tóm gọn tiêu đề của văn bản được hỏi.</p>
             <label for="userQuestion">Câu hỏi</label>
             <textarea id="userQuestion" placeholder="Ví dụ: Điều kiện xử phạt theo Điều 77 là gì?"></textarea>
+              <small class="subtitle" style="display:block; padding-bottom:12px;">
+  Vui lòng đợi từ 1-2 phút vì hệ thống dùng CPU-only
+</small>
             <button class="primary" onclick="sendUserChat()">Gửi câu hỏi</button>
           </div>
 
