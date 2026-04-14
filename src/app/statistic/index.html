@@ -22,7 +22,7 @@
       background: radial-gradient(circle at top, #121a33 0%, var(--bg) 45%);
       color: var(--text);
     }
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 16px 16px 20px; min-height: 100vh; }
     h1, h2, h3 { margin: 0 0 10px; }
     .subtitle { color: var(--muted); margin-bottom: 16px; }
     .grid { display: grid; gap: 12px; }
@@ -77,6 +77,29 @@
     .msg-user { align-self: flex-end; background: #29407a; border: 1px solid #3f5fb0; }
     .msg-bot { align-self: flex-start; background: #15213b; border: 1px solid var(--border); }
     .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+    .user-layout { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(520px, 1.4fr) minmax(320px, 1fr); gap: 12px; margin-top: 12px; align-items: start; }
+    .doc-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .doc-item { text-align: left; width: 100%; }
+    .side-card { height: calc(100vh - 150px); min-height: 700px; display: flex; flex-direction: column; }
+    .viewer-card { height: calc(100vh - 150px); min-height: 700px; display: flex; flex-direction: column; }
+    .chat-column { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 150px); min-height: 700px; }
+    .chat-column .card:first-child { flex: 0 0 auto; }
+    .chat-column .card:last-child { flex: 1; display: flex; flex-direction: column; }
+    .chat-column .chat-thread { max-height: none; height: 100%; }
+    .doc-status { margin-top: 10px; color: var(--muted); font-size: 14px; }
+    .viewer-toolbar { margin-top: 10px; display: flex; gap: 8px; align-items: center; }
+    .viewer-toolbar .zoom-label { font-size: 13px; color: var(--muted); min-width: 58px; text-align: center; }
+    .viewer-shell { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; background: #0f1629; min-height: 420px; overflow: hidden; flex: 1; }
+    .viewer-shell.paper-mode { background: #bfc5d1; padding: 18px; overflow: auto; }
+    .viewer-shell.paper-mode .docx-wrapper { background: transparent !important; padding: 0 !important; }
+    .viewer-shell.paper-mode .docx { margin: 0 auto 18px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.24); }
+    .docx-zoom-container { height: 100%; overflow: auto; }
+    .docx-zoom-content { transform-origin: top center; margin: 0 auto; }
+    .doc-frame { width: 100%; height: 100%; min-height: 520px; border: 0; background: #fff; }
+    .doc-html-viewer { padding: 20px 24px; line-height: 1.65; background: #f7f8fc; color: #17213d; min-height: 420px; white-space: normal; }
+    .doc-html-viewer h4 { margin: 0 0 12px; }
+    @media (max-width: 900px) { .user-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -94,24 +117,51 @@
     </div>
 
     <div id="userPanel" class="hidden">
-      <div class="card">
-        <div class="row" style="justify-content:space-between; align-items:center;">
-          <h2>User Chat</h2>
-          <div>
-            <span class="tag">User mode</span>
-            <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
+      <div class="user-layout">
+        <div class="card side-card">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <h3>5 văn bản pháp luật ngẫu nhiên</h3>
+            <button onclick="loadRandomDocuments()">Làm mới</button>
+          </div>
+          <p class="subtitle">Bấm vào tên file để mở trực tiếp trong khung xem ở giữa.</p>
+          <div id="randomDocList" class="doc-list"></div>
+        </div>
+
+        <div class="card viewer-card">
+          <h3>Khung xem văn bản</h3>
+          <div id="docStatus" class="doc-status">Chọn một file ở cột trái để mở nội dung.</div>
+          <div class="viewer-toolbar">
+            <button onclick="zoomOutViewer()">- Thu nhỏ</button>
+            <button onclick="zoomInViewer()">+ Phóng to</button>
+            <button class="ghost" onclick="resetViewerZoom()">Reset</button>
+            <span id="zoomLabel" class="zoom-label">100%</span>
+          </div>
+          <div id="docViewer" class="viewer-shell"></div>
+        </div>
+
+        <div class="chat-column">
+          <div class="card">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+              <h2>User Chat</h2>
+              <div>
+                <span class="tag">User mode</span>
+                <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
+              </div>
+            </div>
+            <p class="subtitle">Hãy hỏi các câu hỏi pháp luật trong văn bản hiển thị. Khuyến cáo: Mỗi câu hỏi nên đi kèm tóm gọn tiêu đề của văn bản được hỏi.</p>
+            <label for="userQuestion">Câu hỏi</label>
+            <textarea id="userQuestion" placeholder="Ví dụ: Điều kiện xử phạt theo Điều 77 là gì?"></textarea>
+              <small class="subtitle" style="display:block; padding-bottom:12px;">
+  Vui lòng đợi từ 1-2 phút vì hệ thống dùng CPU-only
+</small>
+            <button class="primary" onclick="sendUserChat()">Gửi câu hỏi</button>
+          </div>
+
+          <div class="card">
+            <h3>Hội thoại</h3>
+            <div id="userChatThread" class="chat-thread"></div>
           </div>
         </div>
-        <p class="subtitle">Chỉ nhập câu hỏi pháp luật. Các tham số retrieval dùng cấu hình server (.env).</p>
-
-        <label for="userQuestion">Câu hỏi</label>
-        <textarea id="userQuestion" placeholder="Ví dụ: Điều kiện xử phạt theo Điều 77 là gì?"></textarea>
-        <button class="primary" onclick="sendUserChat()">Gửi câu hỏi</button>
-      </div>
-
-      <div class="card">
-        <h3>Hội thoại</h3>
-        <div id="userChatThread" class="chat-thread"></div>
       </div>
     </div>
 
@@ -155,11 +205,17 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://unpkg.com/docx-preview@0.3.3/dist/docx-preview.min.js"></script>
   <script>
+    let viewerZoom = 1;
+    let activeViewerType = 'none';
+
     function openRole(role) {
       document.getElementById('landing').classList.add('hidden');
       document.getElementById('userPanel').classList.toggle('hidden', role !== 'user');
       document.getElementById('adminPanel').classList.toggle('hidden', role !== 'admin');
+      if (role === 'user') loadRandomDocuments();
     }
 
     function backToLanding() {
@@ -179,6 +235,297 @@
 
     function printAdmin(data) {
       document.getElementById('adminOutput').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function setViewerMode(mode) {
+      const viewerEl = document.getElementById('docViewer');
+      viewerEl.classList.remove('paper-mode');
+      if (mode === 'docx') {
+        viewerEl.classList.add('paper-mode');
+      }
+    }
+
+    function updateZoomLabel() {
+      document.getElementById('zoomLabel').textContent = `${Math.round(viewerZoom * 100)}%`;
+    }
+
+    function applyViewerZoom() {
+      if (activeViewerType !== 'docx') {
+        updateZoomLabel();
+        return;
+      }
+      const zoomRoot = document.getElementById('docxZoomRoot');
+      if (!zoomRoot) {
+        updateZoomLabel();
+        return;
+      }
+      zoomRoot.style.transform = `scale(${viewerZoom})`;
+      zoomRoot.style.width = `${100 / viewerZoom}%`;
+      updateZoomLabel();
+    }
+
+    function zoomInViewer() {
+      viewerZoom = Math.min(2.2, viewerZoom + 0.1);
+      applyViewerZoom();
+    }
+
+    function zoomOutViewer() {
+      viewerZoom = Math.max(0.5, viewerZoom - 0.1);
+      applyViewerZoom();
+    }
+
+    function resetViewerZoom() {
+      viewerZoom = 1;
+      applyViewerZoom();
+    }
+
+
+    async function loadRandomDocuments() {
+      const listEl = document.getElementById('randomDocList');
+      const statusEl = document.getElementById('docStatus');
+      const viewerEl = document.getElementById('docViewer');
+      listEl.innerHTML = '';
+      statusEl.textContent = 'Đang tải danh sách văn bản...';
+      viewerEl.innerHTML = '';
+      activeViewerType = 'none';
+      setViewerMode('default');
+      resetViewerZoom();
+
+      try {
+        const res = await fetch('/api/documents/random?limit=5');
+        const data = await res.json();
+        const items = data.items || [];
+
+        if (!items.length) {
+          statusEl.textContent = 'Không có file trong data/raw hoặc chưa hỗ trợ định dạng.';
+          return;
+        }
+
+        items.forEach((item) => {
+          const btn = document.createElement('button');
+          btn.className = 'doc-item ghost';
+          btn.textContent = `${item.filename} (${item.suffix})`;
+          btn.onclick = () => loadDocumentPreview(item.filename, item.suffix);
+          listEl.appendChild(btn);
+        });
+
+        statusEl.textContent = 'Danh sách đã được làm mới. Hãy chọn 1 file để mở trong khung xem.';
+      } catch (err) {
+        statusEl.textContent = `Lỗi tải danh sách file: ${err}`;
+      }
+
+      viewerEl.innerHTML = `
+        <div class="docx-zoom-container">
+          <div class="docx-zoom-content" id="docxZoomRoot">
+            <div class="doc-html-viewer" id="docxRenderRoot"><h4>${escapeHtml(filename)}</h4><div>Đang render file DOCX...</div></div>
+          </div>
+        </div>
+      `;
+
+      const renderRoot = document.getElementById('docxRenderRoot');
+      try {
+        const fileRes = await fetch(fileUrl);
+        if (!fileRes.ok) {
+          throw new Error(`HTTP ${fileRes.status}`);
+        }
+
+        const fileBuffer = await fileRes.arrayBuffer();
+        renderRoot.innerHTML = '';
+        await window.docx.renderAsync(fileBuffer, renderRoot, null, {
+          className: 'docx',
+          inWrapper: false,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          useBase64URL: true,
+        });
+        applyViewerZoom();
+      } catch (error) {
+        setViewerMode('default');
+        activeViewerType = 'fallback';
+        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(filename)}</h4>
+            <p>Render DOCX lỗi (${escapeHtml(error)}), hiển thị fallback:</p>
+            <div>${htmlBody}</div>
+          </div>
+        `;
+      }
+    }
+
+    async function renderDocumentViewer(item, data) {
+      const viewerEl = document.getElementById('docViewer');
+      const statusEl = document.getElementById('docStatus');
+      const suffix = (item.suffix || '').toLowerCase();
+      const fileUrl = `/api/documents/file?filename=${encodeURIComponent(item.filename)}`;
+      statusEl.textContent = `Đang mở: ${item.filename}`;
+
+      if (suffix === '.pdf') {
+        setViewerMode('default');
+        activeViewerType = 'pdf';
+        viewerEl.innerHTML = `<iframe class="doc-frame" src="${fileUrl}#toolbar=1&navpanes=1"></iframe>`;
+        resetViewerZoom();
+        return;
+      }
+
+      if (suffix === '.docx') {
+        await renderDocxWithLibrary(fileUrl, item.filename, data);
+        return;
+      }
+
+      if (suffix === '.doc') {
+        setViewerMode('default');
+        activeViewerType = 'fallback';
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(item.filename)}</h4>
+            <p>File .doc (Word 97-2003) không render chuẩn trực tiếp trên web.</p>
+            <p>Hệ thống đã ưu tiên lấy .docx để mở đẹp như file gốc khi có cùng tên.</p>
+          </div>
+        `;
+        return;
+      }
+
+      setViewerMode('default');
+      activeViewerType = 'fallback';
+      const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+      viewerEl.innerHTML = `
+        <div class="doc-html-viewer">
+          <h4>${escapeHtml(item.filename)}</h4>
+          <div>${htmlBody}</div>
+        </div>
+      `;
+    }
+
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('\"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    async function renderDocxWithLibrary(fileUrl, filename, data) {
+      const viewerEl = document.getElementById('docViewer');
+      activeViewerType = 'docx';
+      setViewerMode('docx');
+
+      if (!window.JSZip || !window.docx || typeof window.docx.renderAsync !== 'function') {
+        setViewerMode('default');
+        activeViewerType = 'fallback';
+        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(filename)}</h4>
+            <p>Không tải được thư viện DOCX viewer, hiển thị bản fallback:</p>
+            <div>${htmlBody}</div>
+          </div>
+        `;
+        return;
+      }
+
+      viewerEl.innerHTML = `
+        <div class="docx-zoom-container">
+          <div class="docx-zoom-content" id="docxZoomRoot">
+            <div class="doc-html-viewer" id="docxRenderRoot"><h4>${escapeHtml(filename)}</h4><div>Đang render file DOCX...</div></div>
+          </div>
+        </div>
+      `;
+
+      const renderRoot = document.getElementById('docxRenderRoot');
+      try {
+        const fileRes = await fetch(fileUrl);
+        if (!fileRes.ok) {
+          throw new Error(`HTTP ${fileRes.status}`);
+        }
+
+        const fileBuffer = await fileRes.arrayBuffer();
+        renderRoot.innerHTML = '';
+        await window.docx.renderAsync(fileBuffer, renderRoot, null, {
+          className: 'docx',
+          inWrapper: false,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          useBase64URL: true,
+        });
+        applyViewerZoom();
+      } catch (error) {
+        setViewerMode('default');
+        activeViewerType = 'fallback';
+        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(filename)}</h4>
+            <p>Render DOCX lỗi (${escapeHtml(error)}), hiển thị fallback:</p>
+            <div>${htmlBody}</div>
+          </div>
+        `;
+      }
+    }
+
+    async function renderDocumentViewer(item, data) {
+      const viewerEl = document.getElementById('docViewer');
+      const statusEl = document.getElementById('docStatus');
+      const suffix = (item.suffix || '').toLowerCase();
+      const fileUrl = `/api/documents/file?filename=${encodeURIComponent(item.filename)}`;
+      statusEl.textContent = `Đang mở: ${item.filename}`;
+
+      if (suffix === '.pdf') {
+        setViewerMode('default');
+        activeViewerType = 'pdf';
+        viewerEl.innerHTML = `<iframe class="doc-frame" src="${fileUrl}#toolbar=1&navpanes=1"></iframe>`;
+        resetViewerZoom();
+        return;
+      }
+
+      if (suffix === '.docx') {
+        await renderDocxWithLibrary(fileUrl, item.filename, data);
+        return;
+      }
+
+      if (suffix === '.doc') {
+        setViewerMode('default');
+        activeViewerType = 'fallback';
+        viewerEl.innerHTML = `
+          <div class="doc-html-viewer">
+            <h4>${escapeHtml(item.filename)}</h4>
+            <p>File .doc (Word 97-2003) không render chuẩn trực tiếp trên web.</p>
+            <p>Hệ thống đã ưu tiên lấy .docx để mở đẹp như file gốc khi có cùng tên.</p>
+          </div>
+        `;
+        return;
+      }
+
+      setViewerMode('default');
+      activeViewerType = 'fallback';
+      const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
+      viewerEl.innerHTML = `
+        <div class="doc-html-viewer">
+          <h4>${escapeHtml(item.filename)}</h4>
+          <div>${htmlBody}</div>
+        </div>
+      `;
+    }
+
+    async function loadDocumentPreview(filename, suffix = null) {
+      const statusEl = document.getElementById('docStatus');
+      statusEl.textContent = 'Đang tải nội dung văn bản...';
+
+      try {
+        const res = await fetch(`/api/documents/preview?filename=${encodeURIComponent(filename)}`);
+        const data = await res.json();
+        await renderDocumentViewer({ filename, suffix: suffix || data.suffix || '' }, data);
+      } catch (err) {
+        statusEl.textContent = `Lỗi tải nội dung file: ${err}`;
+      }
     }
 
     async function sendUserChat() {
