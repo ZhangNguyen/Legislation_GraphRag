@@ -9,7 +9,8 @@ from fastapi.responses import FileResponse, RedirectResponse
 from src.app.api.router import api_router
 from src.app.runtime import preload_runtime_on_startup
 from src.app.settings import settings
-
+from src.rag.bm25_service import load_or_build_bm25
+import os
 app = FastAPI(title="Legislation RAG", version="0.2.0")
 
 app.add_middleware(
@@ -42,6 +43,16 @@ def health():
 
 @app.on_event("startup")
 async def startup_event():
+    print("🚀 Server starting...")
+    bm25_path = settings.bm25_stats_path  # outputs/bm25/bm25_stats.json
+
+    # Nếu chưa có → build
+    if not os.path.exists(bm25_path):
+        print("⚠️ BM25 stats not found → building...")
+        load_or_build_bm25(force_rebuild=True)
+        print("✅ BM25 built successfully!")
+    else:
+        print("✅ BM25 stats loaded")
     preload_runtime_on_startup(
         preload_graph_snapshot=True,
         build_graph_if_missing=True,
