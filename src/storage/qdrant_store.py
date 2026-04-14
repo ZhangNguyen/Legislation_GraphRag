@@ -12,12 +12,12 @@ from src.app.settings import settings
 
 DEFAULT_VECTOR_SIZE = 1536
 
-
 def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key or None,
         check_compatibility=False,
+        timeout=120,
     )
 
 
@@ -49,8 +49,8 @@ def build_filter(filters: Dict[str, Any]) -> Optional[qm.Filter]:
 def upsert_points(client: QdrantClient, points: List[qm.PointStruct]) -> None:
     if not points:
         return
-    max_batch_bytes = 8 * 1024 * 1024
-    max_batch_points = 256
+    max_batch_bytes = 2 * 1024 * 1024
+    max_batch_points = 64
 
     def _estimate_point_bytes(point: qm.PointStruct) -> int:
         payload = getattr(point, "payload", {}) or {}
