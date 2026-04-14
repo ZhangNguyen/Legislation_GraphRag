@@ -1,0 +1,221 @@
+QUYẾT ĐỊNH
+VỀ VIỆC BAN HÀNH KẾ HOẠCH CHUYỂN ĐỔI SỐ CỦA BỘ CÔNG THƯƠNG GIAI ĐOẠN 2026 - 2030
+BỘ TRƯỞNG BỘ CÔNG THƯƠNG
+Căn cứ Luật Chuyển đổi số ngày 11/12/2025;
+Căn cứ Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia;
+Căn cứ Kế hoạch số 02-KH/BCĐTW ngày 19/6/2025 của Ban Chỉ đạo Trung ương về phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số về thúc đẩy chuyển đổi số liên thông, đồng bộ, nhanh, hiệu quả đáp ứng yêu cầu sắp xếp tổ chức bộ máy của hệ thống chính trị;
+Căn cứ Chương trình số 02-CTr/BCĐTW ngày 02/02/2026 của Ban Chỉ đạo Trung ương thực hiện Nghị quyết số 57-NQ/TW;
+Căn cứ Quyết định số 749/QĐ-TTg ngày 03/6/2020 của Thủ tướng Chính phủ phê duyệt "Chương trình Chuyển đổi số quốc gia đến năm 2025, định hướng đến năm 2030";
+Căn cứ Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia;
+Căn cứ Nghị quyết số 214/NQ-CP ngày 23 tháng 7 năm 2025 của Chính phủ ban hành kế hoạch hành động của Chính phủ về thúc đẩy tạo lập dữ liệu phục vụ chuyển đổi số toàn diện;
+Căn cứ Quyết định số 36/QĐ-TTg ngày 11/01/2024 của Thủ tướng Chính phủ: Phê duyệt Quy hoạch hạ tầng thông tin và truyền thông thời kỳ 2021-2030, tầm nhìn đến năm 2050;
+Căn cứ Quyết định số 1132/QĐ-TTg ngày 09/10/2024 của Thủ tướng Chính phủ phê duyệt Chiến lược hạ tầng số đến năm 2025, định hướng đến năm 2030;
+Căn cứ Quyết định số 2629/QĐ-TTg ngày 01 tháng 12 năm 2025 của Thủ tướng Chính phủ phê duyệt Chương trình phát triển Chính phủ số;
+Theo đề nghị của Cục trưởng Cục Thương mại điện tử và Kinh tế số.
+QUYẾT ĐỊNH:
+Điều 1. Ban hành kèm theo Quyết định này Kế hoạch Chuyển đổi số của Bộ Công Thương giai đoạn 2026 - 2030.
+Điều 2. Quyết định này có hiệu lực thi hành kể từ ngày ký ban hành.
+Điều 3. Chánh Văn phòng Bộ, Cục trưởng Cục Thương mại điện tử và Kinh tế số, Thủ trưởng các đơn vị thuộc Bộ và các cơ quan có liên quan chịu trách nhiệm thi hành Quyết định này./.
+KẾ HOẠCH
+CHUYỂN ĐỔI SỐ CỦA BỘ CÔNG THƯƠNG GIAI ĐOẠN 2026-2030
+(Ban hành kèm theo Quyết định số 405/QĐ-BCT ngày 09 tháng 3 năm 2026 của Bộ trưởng Bộ Công Thương)
+I. MỤC TIÊU
+1. Mục tiêu chung
+Xây dựng Bộ Công Thương số hoạt động dựa trên dữ liệu và công nghệ số, đơn giản hóa thủ tục hành chính, cung cấp dịch vụ công chất lượng cao. Kinh tế số trở thành động lực tăng trưởng chủ yếu. Xã hội số phát triển văn minh, an toàn, bao trùm.
+2. Mục tiêu cụ thể
+2.1 Phát triển Chính phủ số, nâng cao hiệu quả hoạt động quản lý nhà nước
+Tối thiểu bao gồm các chỉ tiêu sau:
+a) Cung cấp dịch vụ số bao trùm, thông minh
+Một số chỉ tiêu cơ bản bao gồm:
+* Giai đoạn năm 2026-2027
+- 100% thủ tục hành chính đủ điều kiện được thực hiện trực tuyến toàn trình.
+- 100% thông tin, giấy tờ, tài liệu trong các thủ tục hành chính liên quan đến hoạt động sản xuất, kinh doanh chỉ cung cấp một lần cho cơ quan hành chính nhà nước.
+- 100% dịch vụ công trực tuyến toàn trình thiết yếu được ứng dụng AI trong ít nhất một trong các khâu tiếp nhận, xử lý hồ sơ, hỗ trợ người dùng hoặc ra quyết định tự động, nhằm nâng cao hiệu quả, tốc độ và chất lượng phục vụ.
+- 95% người dân, doanh nghiệp đánh giá hài lòng khi sử dụng dịch vụ công trực tuyến.
+* Giai đoạn 2028-2030
+- 99% người dân, doanh nghiệp đánh giá hài lòng khi sử dụng dịch vụ công trực tuyến.
+- 100% dịch vụ công trực tuyến toàn trình được ứng dụng AI trong ít nhất một trong các khâu tiếp nhận, xử lý hồ sơ, hỗ trợ người dùng hoặc ra quyết định tự động, nhằm nâng cao hiệu quả, tốc độ và chất lượng phục vụ.
+- 50% dịch vụ công trực tuyến thiết yếu được triển khai ở mức chủ động, được AI hỗ trợ “cá thể hóa”, thông báo hoặc gợi ý hành động theo các mốc sự kiện quan trọng trong cuộc đời.
+- 70% dữ liệu mở công bố được ghi nhận có lượt truy cập, sử dụng lại hoặc tích hợp vào nền tảng bên ngoài, trong đó có ít nhất 30 sáng kiến đổi mới sáng tạo hoặc sản phẩm dịch vụ kinh tế sử dụng dữ liệu mở do cơ quan nhà nước công bố.
+- 100% hồ sơ, kết quả giải quyết thủ tục hành chính được số hóa.
+- 100% hồ sơ, kết quả giải quyết thủ tục hành chính đã được số hóa được tái sử dụng trong tiếp nhận, giải quyết thủ tục hành chính.
+- 100% các ứng dụng, nền tảng được ban hành theo Quyết định số 33/2025/QĐ-TTg ngày 15/9/2025 của Thủ tướng Chính phủ phải được triển khai sử dụng trên Mạng truyền số liệu chuyên dùng.
+b) Quản lý, chỉ đạo, điều hành thông minh, an toàn dựa trên dữ liệu
+Một số chỉ tiêu cơ bản bao gồm:
+* Giai đoạn năm 2026-2027
+- 100% thủ tục hành chính nội bộ trong Bộ được thực hiện quản trị nội bộ trên môi trường điện tử.
+- 100% các nền tảng số quốc gia, nền tảng số dùng chung của ngành, lĩnh vực phục vụ Chính phủ số hoàn thành, đưa vào sử dụng theo đúng kế hoạch.
+- 100% đạt cấp độ 3 mức độ trưởng thành về quản trị dữ liệu.
+- 100% cán bộ, công chức, viên chức được đào tạo kỹ năng số cơ bản.
+- 50% cán bộ chuyên trách về công nghệ thông tin, dữ liệu của Bộ được đào tạo đạt chứng chỉ quản trị dữ liệu cơ bản.
+* Giai đoạn năm 2028-2030
+- Đạt cấp độ 4 mức độ trưởng thành về quản trị dữ liệu.
+- 100% hệ thống thông tin được kết nối, chia sẻ dữ liệu qua dịch vụ chia sẻ dữ liệu.
+- Vận hành Trung tâm giám sát, điều hành thông minh ứng dụng công nghệ.
+- 100% cán bộ, công chức, viên chức thường xuyên sử dụng trợ lý ảo hoặc công cụ số thông minh để hỗ trợ thực thi công vụ nhằm nâng cao hiệu suất làm việc.
+- 100% cơ quan, tổ chức sử dụng ít nhất 01 ứng dụng AI để phục vụ công tác chỉ đạo, điều hành, cải cách hành chính.
+- 90% phản hồi, góp ý của người dân từ Cổng dịch vụ công quốc gia, mạng xã hội, hệ thống phản ánh hiện trường,... được trợ lý ảo hỗ trợ xử lý.
+- 100% nhiệm vụ của Bộ thực hiện được theo dõi, quản lý, giám sát trên môi trường số.
+- 100% thực hiện việc chỉ đạo, điều hành, quản trị nội bộ trên môi trường số.
+- 100% cán bộ chuyên trách về công nghệ thông tin, dữ liệu của Bộ được đào tạo đạt chứng chỉ quản trị dữ liệu cơ bản.
+- Có tối thiểu 01 dự án đầu tư ứng dụng công nghệ thông tin phục vụ phát triển Chính phủ số áp dụng mô hình hợp tác công tư (PPP).
+- 100% hệ thống thông tin phục vụ phát triển Chính phủ số phải được phê duyệt hồ sơ đề xuất bảo đảm an toàn thông tin, an ninh mạng theo cấp độ trước khi đưa vào vận hành, sử dụng; được kiểm tra, đánh giá mức độ bảo đảm an toàn thông tin, an ninh mạng định kỳ.
+- 100% sử dụng các dịch vụ điện toán đám mây do doanh nghiệp trong nước cung cấp.
+2.2 Phát triển kinh tế số, nâng cao năng lực cạnh tranh, thúc đẩy tăng trưởng hai con số của nền kinh tế
+2.2.1. Phát triển thương mại điện tử
+a) Về tạo môi trường cạnh tranh lành mạnh cho thương mại điện tử phát triển bền vững
+- Dân số trưởng thành tham gia mua sắm trực tuyến đạt 70%;
+- Doanh số bán lẻ thương mại điện tử tăng từ 20 - 30%/năm, chiếm 20% so với tổng mức bán lẻ hàng hóa cả nước;
+- Tỷ lệ doanh nghiệp đáp ứng bộ tiêu chí quốc gia về thương mại điện tử bền vững đạt 60%;
+- Tỷ lệ website vi phạm quyền lợi người tiêu dùng trong thương mại điện tử giảm xuống còn 5-10% trên tổng số website thương mại điện tử.
+b) Về nâng cao năng lực cạnh tranh của doanh nghiệp
+- Tỷ lệ doanh nghiệp ứng dụng thương mại điện tử phấn đấu đạt trên 70%;
+- 100% các giao dịch trên nền tảng thương mại điện tử có hóa đơn điện tử;
+- Thanh toán không dùng tiền mặt trong thương mại điện tử đạt 80%;
+- Chi phí trung bình cho giao hàng chặng cuối trong thương mại điện tử chiếm không quá 8-15% doanh thu;
+- 60% doanh nghiệp vừa và nhỏ tiến hành hoạt động kinh doanh trên nền tảng thương mại điện tử.
+c) Phát triển thương mại điện tử theo liên kết vùng, thu hẹp khoảng cách giữa các địa phương
+- Các địa phương ngoài Hà Nội và thành phố Hồ Chí Minh chiếm 50% giá trị giao dịch thương mại điện tử B2C của toàn quốc;
+- 60% số xã và các đơn vị hành chính tương đương trên cả nước có thương nhân thực hiện hoạt động bán hàng hóa hoặc cung ứng dịch vụ trực tuyến;
+- Tận dụng tối đa tiềm năng, lợi thế so sánh của từng địa phương về vùng nguyên liệu, năng lực sản xuất (khu công nghiệp, khu chế biến), năng lực logistics, nguồn nhân lực nhằm tăng cường liên kết vùng trong phát triển thương mại điện tử, giúp khai thác và sử dụng nguồn lực nội vùng và liên vùng hiệu quả.
+d) Phát triển thương mại điện tử theo hướng xanh, tuần hoàn, bền vững
+- Tỷ lệ sản phẩm trong thương mại điện tử sử dụng bao bì nhựa giảm xuống còn tối đa 45%;
+- Tỷ lệ sản phẩm trong thương mại điện tử sử dụng bao bì là chất liệu có thể tái chế đạt 50%;
+- Tỷ lệ doanh nghiệp sử dụng năng lượng sạch trong logistics cho thương mại điện tử đạt ít nhất 40%;
+- Tỷ lệ doanh nghiệp áp dụng tiêu chuẩn đóng gói xanh cho thương mại điện tử đạt ít nhất 50%.
+e) Phát triển nguồn nhân lực trong thương mại điện tử
+- 60% cơ sở giáo dục đại học và giáo dục nghề nghiệp triển khai đào tạo chuyên ngành liên quan đến lĩnh vực thương mại điện tử;
+- 1.000.000 lượt doanh nghiệp, hợp tác xã, hộ kinh doanh, cá nhân, cán bộ quản lý nhà nước, sinh viên, cá nhân được tham gia các khóa đào tạo về kỹ năng ứng dụng thương mại điện tử.
+2.2.2. Phát triển công nghiệp, năng lượng
+- Phát triển hạ tầng năng lượng, đảm bảo an ninh năng lượng, khai thác, sử dụng các nguồn tài nguyên khoáng sản để phát triển khoa học, công nghệ, đổi mới sáng tạo và các ngành công nghiệp chiến lược.
+- Quy hoạch phát triển điện lực quốc gia để đảm bảo đáp ứng nguồn điện xanh - sạch, đảm bảo dự phòng cao cho các trung tâm dữ liệu, đáp ứng nhu cầu Trung tâm dữ liệu quốc tế tại Việt Nam.
+2.3 Phát triển xã hội số, thu hẹp khoảng cách số:
+- Tỷ lệ sử dụng IPv6 trong cơ quan của Bộ đạt 90%-100%;
+- 100% cán bộ tiếp cận các kênh truyền thông chính thống trên nền tảng số.
+II. NHIỆM VỤ, GIẢI PHÁP
+1. Tăng cường công tác lãnh đạo, chỉ đạo, điều hành; kiểm tra, giám sát hoạt động chuyển đổi số
+- Ban hành Kế hoạch Chuyển đổi số Bộ Công Thương thường niên.
+- Ban hành Kế hoạch kiểm tra, giám sát tình hình thực hiện các nhiệm vụ chuyển đổi số tại Bộ Công Thương.
+2. Thể chế, chính sách số
+- Rà soát, công bố hoặc trình cấp có thẩm quyền công bố việc tiếp tục hiệu lực (toàn bộ hoặc một phần) đối với các văn bản quy định chi tiết, hướng dẫn thi hành Luật Công nghệ thông tin số 67/2006/QH11 ban hành trước ngày Luật Chuyển đổi số có hiệu lực.
+- Rà soát các văn bản do cơ quan mình hoặc cấp dưới ban hành có liên quan đến Luật Chuyển đổi số thuộc phạm vi, lĩnh vực, địa bàn quản lý; gửi kết quả rà soát, đánh giá tính tương thích kèm theo đề xuất cụ thể (sửa đổi, bổ sung, thay thế, bãi bỏ) về Bộ Khoa học và Công nghệ để tổng hợp, báo cáo Thủ tướng Chính phủ.
+- Thường xuyên rà soát, cập nhật định kỳ trong quá trình triển khai thi hành Luật Chuyển đổi số để kịp thời điều chỉnh các văn bản liên quan.
+- Xây dựng các quy định cho phép thử nghiệm có kiểm soát (Sandbox) đối với các mô hình kinh doanh mới, công nghệ mới khi chưa có quy định pháp lý rõ ràng.
+- Ban hành danh mục dữ liệu dùng chung, dữ liệu mở. Quy định cụ thể về trách nhiệm chia sẻ dữ liệu giữa các cơ quan nhà nước theo nguyên tắc "Dữ liệu của cơ quan nhà nước mặc định mở và chia sẻ, trừ trường hợp pháp luật quy định khác".
+- Ưu tiên thuê dịch vụ CNTT, thuê hạ tầng đám mây thay vì đầu tư mua sắm phần cứng, giúp linh hoạt và tối ưu chi phí.
+3. Hạ tầng số
+- Chuyển đổi IPv6 toàn diện: Thực hiện nghiêm túc "Chương trình thúc đẩy, triển khai, chuyển đổi IPv6 only cho Việt Nam giai đoạn 2026 - 2030". Mục tiêu là đạt tỷ lệ 90-100% sử dụng IPv6 vào năm 2030. Cần ban hành kế hoạch cụ thể để chuyển đổi hạ tầng mạng lưới, dịch vụ công, Cổng thông tin điện tử sang hỗ trợ IPv6, tiến tới tắt bỏ hoàn toàn IPv4.
+- Mạng truyền số liệu chuyên dùng (TSLCD): kết nối vào Mạng truyền số liệu chuyên dùng để sử dụng, khai thác chung nhằm phục vụ phát triển kinh tế - xã hội, bảo đảm an toàn, hiệu quả, tránh lãng phí...
+- Hạ tầng Điện toán đám mây (Cloud): Thực hiện chiến lược "Cloud First" (Ưu tiên đám mây). Quy hoạch và chuyển dịch hệ thống thông tin của Bộ lên các nền tảng điện toán đám mây đạt chuẩn của doanh nghiệp trong nước, hạn chế tối đa việc đầu tư phòng máy chủ nhỏ lẻ tại đơn vị.
+4. Nhân lực số
+- Tập trung đào tạo đội ngũ chuyên gia về dữ liệu (Data Scientist), AI, an toàn thông tin cho cơ quan nhà nước.
+- Nghiên cứu áp dụng các cơ chế đặc thù về lương, thưởng, chế độ làm việc để thu hút nhân tài CNTT vào khu vực công, dựa trên các quy định mở của Dự thảo Luật Chuyển đổi số.
+- Bồi dưỡng tư duy chuyển đổi số, quản trị dựa trên dữ liệu cho đội ngũ lãnh đạo các cấp.
+5. Phát triển dữ liệu số
+- Thực hiện Chiến lược Phát triển dữ liệu của Bộ Công Thương tại Quyết định số 3255/QĐ-BCT ngày 05 tháng 11 năm 2025.
+- Xây dựng Kho dữ liệu (Data Warehouse) hoặc Hồ dữ liệu (Data Lake) cấp Bộ.
+- Triển khai các công cụ rà soát, làm sạch, chuẩn hóa dữ liệu. Đảm bảo dữ liệu "đúng, đủ, sạch, sống". Nâng cao mức độ trưởng thành về quản trị dữ liệu lên cấp độ 4-5.
+- Công bố dữ liệu mở phục vụ người dân và doanh nghiệp khai thác, tạo ra giá trị mới. Ví dụ: Dữ liệu về thời gian thực xe buýt, dữ liệu quan trắc môi trường, dữ liệu quy hoạch....
+6. An toàn thông tin mạng
+- Đảm bảo 100% hệ thống thông tin được phê duyệt cấp độ an toàn và triển khai phương án bảo vệ theo cấp độ (Mô hình 4 lớp).
+- Triển khai các giải pháp bảo vệ dữ liệu cá nhân, chống lộ lọt dữ liệu. Tuân thủ nghiêm ngặt pháp luật Bảo vệ dữ liệu cá nhân (dự kiến).
+- Ứng dụng AI để rà quét, phát hiện và ngăn chặn tin giả, thông tin xấu độc, lừa đảo trực tuyến (Deepfake).
+7. Chính phủ số
+- Dịch vụ công thông minh với AI: Tích hợp AI vào Cổng dịch vụ công để hỗ trợ người dân (Trợ lý ảo hướng dẫn TTHC). Sử dụng AI để tự động hóa quy trình: Tự động điền biểu mẫu (pre-fill) từ CSDL dân cư; tự động kiểm tra tính hợp lệ của hồ sơ; tự động soạn thảo dự thảo kết quả.
+- Chỉ đạo điều hành dựa trên dữ liệu: Nâng cấp các Trung tâm giám sát, điều hành thông minh (IOC). Không chỉ dừng lại ở việc hiển thị biểu đồ thống kê (Descriptive Analytics) mà phải tiến tới phân tích dự báo (Predictive Analytics) và cảnh báo sớm các vấn đề kinh tế - xã hội. Triển khai "Trợ lý ảo" cho cán bộ, công chức để hỗ trợ tra cứu văn bản pháp luật, tìm kiếm thông tin, hỗ trợ ra quyết định.
+8. Kinh tế số và xã hội số
+- Xây dựng bộ tiêu chí và công cụ đo lường đánh giá trực tuyến về mức độ chuyển đổi số trong các ngành, lĩnh vực; (ii) đặt hàng các doanh nghiệp công nghệ số xây dựng hệ sinh thái sản phẩm, dịch vụ số gắn với các tiêu chí đo lường, đánh giá; (iii) phát triển doanh nghiệp công nghệ số mạnh là lực lượng sản xuất tiên tiến để thúc đẩy kinh tế số ngành, lĩnh vực;
+- Đo lường trực tuyến sự phát triển của kinh tế số; (ii) tổ chức triển khai thực hiện chương trình khảo sát, đo lường, đánh giá mức độ chuyển đổi số trong các ngành, lĩnh vực tại địa phương; (iii) hỗ trợ kết nối tổ chức, doanh nghiệp, hộ kinh doanh ... với hệ sinh thái sản phẩm và dịch vụ số; (iv) phát triển doanh nghiệp công nghệ số mạnh là lực lượng sản xuất tiên tiến đề thúc đẩy kinh tế số ngành, lĩnh vực;
+- Lập kế hoạch để triển khai các Chương trình đẩy mạnh sản xuất thông minh, chuyển đổi số trong các lĩnh vực trọng điểm theo nhiệm vụ Chính phủ giao năm 2025 tại Nghị quyết số 71/NQ-CP ngày 01/04/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57/NQ-TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+9. Nâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tin
+Triển khai, cụ thể hóa các nội dung tuyên truyền, truyền thông về chuyển đổi số thành các chương trình, kế hoạch, chiến dịch của Bộ.
+III. KINH PHÍ THỰC HIỆN
+Kinh phí thực hiện kế hoạch từ nguồn ngân sách nhà nước cấp.
+IV. TỔ CHỨC THỰC HIỆN
+1. Các đơn vị thuộc Bộ
+- Triển khai thực hiện các nhiệm vụ theo phân công tại Kế hoạch này (chi tiết theo Phụ lục). Trường hợp cần thiết, thủ trưởng các đơn vị xem xét, báo cáo Lãnh đạo Bộ, Ban Chỉ đạo về chuyển đổi số Bộ Công Thương để thực hiện điều chỉnh, bổ sung nhiệm vụ, hoặc điều chỉnh bổ sung tiến độ triển khai khi có các vấn đề phát sinh.
+- Về chế độ báo cáo: Định kỳ hàng quý (trước ngày 20 tháng cuối quý) báo cáo Bộ trưởng Bộ Công Thương kết quả thực hiện (qua Cục Thương mại điện tử và Kinh tế số) tiến độ thực hiện nhiệm vụ để theo dõi, tổng hợp.
+2. Cục Thương mại điện tử và Kinh tế số
+Chủ trì phối hợp với các đơn vị liên quan tổ chức triển khai, theo dõi, đôn đốc, triển khai thực hiện kế hoạch này; định kỳ, đột xuất báo cáo tình hình, kết quả thực hiện kế hoạch và kiến nghị Bộ trưởng Bộ Công Thương các biện pháp thực hiện kế hoạch có hiệu quả./.
+PHỤ LỤC:
+DANH MỤC NHIỆM VỤ TRIỂN KHAI KẾ HOẠCH CHUYỂN ĐỔI SỐ CỦA BỘ CÔNG THƯƠNG GIAI ĐOẠN 2026 - 2030
+(Ban hành kèm theo Quyết định số 405/QĐ-BCT ngày 09 tháng 03 năm 2026 của Bộ trưởng Bộ Công Thương)
+[1] Nhiệm vụ được giao tại Chương trình số 02-CTr/BCĐTW ngày 02/02/2026 của Ban Chỉ đạo Trung ương thực hiện Nghị quyết số 57-NQ/TW.
+[2] Nhiệm vụ được giao tại Chương trình số 02-CTr/BCĐTW ngày 02/02/2026 của Ban Chỉ đạo Trung ương thực hiện Nghị quyết số 57-NQ/TW.
+[3] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[4] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[5] Nhiệm vụ được giao tại Quyết định 235/QĐ-BCT ngày 03/02/2026 của Bộ trưởng Bộ Công Thương về việc ban hành Khung kiến trúc dữ liệu của Bộ Công Thương.
+[6] Nhiệm vụ được giao tại Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[7] Nhiệm vụ được giao tại Quyết định số 749/QĐ-TTg ngày 03/6/2020 của Thủ tướng Chính phủ phê duyệt "Chương trình Chuyển đổi số quốc gia đến năm 2025, định hướng đến năm 2030".
+[8] Nhiệm vụ được giao tại Quyết định số 749/QĐ-TTg ngày 03/6/2020 của Thủ tướng Chính phủ phê duyệt "Chương trình Chuyển đổi số quốc gia đến năm 2025, định hướng đến năm 2030".
+[9] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[10] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[11] Nhiệm vụ được giao tại Luật Chuyển đổi số 2025
+[12] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[13] Nhiệm vụ tại Quyết định số 3255/QĐ-BCT ngày 05 tháng 11 năm 2025 về việc phê duyệt Chiến lược Phát triển dữ liệu và quy hoạch tổng thể trung tâm dữ liệu của Bộ Công Thương.
+[14] Nhiệm vụ tại Kế hoạch số 02-KH/BCĐTW ngày 19/6/2025 của Ban Chỉ đạo Trung ương về phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số về thúc đẩy chuyển đổi số liên thông, đồng bộ, nhanh, hiệu quả đáp ứng yêu cầu sắp xếp tổ chức bộ máy của hệ thống chính trị.
+[15] Nhiệm vụ tại Quyết định số 3255/QĐ-BCT ngày 05 tháng 11 năm 2025 về việc phê duyệt Chiến lược Phát triển dữ liệu và quy hoạch tổng thể trung tâm dữ liệu của Bộ Công Thương.
+[16] Nhiệm vụ tại Chỉ thị số 9/CT-TTg ngày 23/2/2024 của Thủ tướng về tuân thủ quy định pháp luật và tăng cường bảo đảm an toàn hệ thống thông tin theo cấp độ.
+[17] Nhiệm vụ 6.2; 6.3; 7.1; 7.2; 7.3 theo hướng dẫn của Bộ Khoa học và Công nghệ tại văn bản số 5511/BKHCN-CĐSQG ngày 10/10/2025 về việc hướng dẫn các bộ, ngành, địa phương xây dựng Kế hoạch Chuyển đổi số năm 2026.
+[18] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[19] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[20] Nhiệm vụ được giao tại Nghị quyết số 71/NQ-CP ngày 01/4/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57-NQ/TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia.
+[21] Nhiệm vụ được giao tại Quyết định 11/2026/QĐ-TTg ngày 27/02/2026 ban hành Kế hoạch hoạt động năm 2026 về phát triển khoa học công nghệ, đổi mới sáng tạo, chuyển đổi số và Đề án 06.
+[22] Nhiệm vụ được giao tại Chương trình số 02-CTr/BCĐTW ngày 02/02/2026 của Ban Chỉ đạo Trung ương thực hiện Nghị quyết số 57-NQ/TW.
+BỘ CÔNG THƯƠNG
+------- | CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+---------------
+Số: 405/QĐ-BCT | Hà Nội, ngày 09 tháng 3 năm 2026
+Nơi nhận:
+- Như Điều 3;
+- Văn phòng Trung ương Đảng;
+- Văn phòng Chính phủ;
+- Bộ Khoa học và Công nghệ;
+- Bộ Công an;
+- Quyền Bộ trưởng (để báo cáo);
+- Lưu: VT, TMĐTAnhDTuan | KT. BỘ TRƯỞNG
+THỨ TRƯỞNG
+
+Nguyễn Sinh Nhật Tân
+TT | Tên nhiệm vụ | Đơn vị chủ trì | Đơn vị phối hợp | Thời gian thực hiện | Sản phẩm đầu ra dự kiến
+1 | Về tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi số | Về tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi số | Về tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi số | Về tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi số | Về tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi sốVề tăng cường công tác lãnh đạo trong công tác chuyển đổi số
+1.1 | Ban hành Kế hoạch Chuyển đổi số Bộ Công Thương thường niên | Cục Thương mại điện tử và kinh tế số | Thường niên | Quyết định của Bộ được ban hành
+1.2 | Ban hành Kế hoạch kiểm tra, giám sát tình hình thực hiện các nhiệm vụ chuyển đổi số tại Bộ Công Thương. | Cục Thương mại điện tử và Kinh tế số | Thường niên | Quyết định của Bộ được ban hành
+2 | Về thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sách | Về thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sách | Về thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sách | Về thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sách | Về thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sáchVề thể chế, chính sách
+2.1 | Rà soát, công bố hoặc trình cấp có thẩm quyền công bố việc tiếp tục hiệu lực (toàn bộ hoặc một phần) đối với các văn bản quy định chi tiết, hướng dẫn thi hành Luật Công nghệ thông tin số 67/2006/QH11 ban hành trước ngày Luật Chuyển đổi số có hiệu lực[1] | Vụ Pháp chế | Cục Thương mại điện tử và Kinh tế số | 2026 | Báo cáo rà soát của Bộ Công Thương
+2.2 | Rà soát các văn bản do cơ quan mình hoặc cấp dưới ban hành có liên quan đến Luật Chuyển đổi số thuộc phạm vi, lĩnh vực, địa bàn quản lý; gửi kết quả rà soát, đánh giá tính tương thích kèm theo đề xuất cụ thể (sửa đổi, bổ sung, thay thế, bãi bỏ) về Bộ Khoa học và Công nghệ để tổng hợp, báo cáo Thủ tướng Chính phủ.[2] | Vụ Pháp chế | Cục Thương mại điện tử và Kinh tế số | 2026 | Báo cáo rà soát của Bộ Công Thương
+2.3 | Thường xuyên rà soát, cập nhật định kỳ trong quá trình triển khai thi hành Luật Chuyển đổi số để kịp thời điều chỉnh các văn bản liên quan.[3] | Vụ Pháp chế | Cục Thương mại điện tử và Kinh tế số | Thường xuyên | Báo cáo rà soát của Bộ Công Thương
+2.4 | Xây dựng các quy định cho phép thử nghiệm có kiểm soát (Sandbox) đối với các mô hình kinh doanh mới, công nghệ mới khi chưa có quy định pháp lý rõ ràng[4]. | Cục Đổi mới sáng tạo, Chuyển đổi xanh và Khuyến công | Cục Thương mại điện tử và Kinh tế số | 2026-2030 | Các quy định của Bộ Công Thương cho phép thử nghiệm có kiểm soát (Sandbox) đối với các mô hình kinh doanh mới, công nghệ mới được ban hành
+2.5 | Ban hành danh mục dữ liệu dùng chung, dữ liệu mở. Quy định cụ thể về trách nhiệm chia sẻ dữ liệu giữa các cơ quan nhà nước theo nguyên tắc "Dữ liệu của cơ quan nhà nước mặc định mở và chia sẻ, trừ trường hợp pháp luật quy định khác".[5] | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | 2026 | Quyết định của Bộ được ban hành
+2.6 | Ưu tiên thuê dịch vụ CNTT, thuê hạ tầng đám mây thay vì đầu tư mua sắm phần cứng, giúp linh hoạt và tối ưu chi phí[6] | Các đơn vị thuộc Bộ | Cục Thương mại điện tử và Kinh tế số | 2026 | Văn bản của Bộ quy định về thuê dịch vụ CNTT, thuê hạ tầng đám mây thay vì đầu tư mua sắm phần cứng trong Bộ, giúp linh hoạt và tối ưu chi phí
+3 | Về hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng số | Về hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng số | Về hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng số | Về hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng số | Về hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng sốVề hạ tầng số
+3.1 | Chuyển đổi IPv6 toàn diện: Thực hiện nghiêm túc "Chương trình thúc đẩy, triển khai, chuyển đổi IPv6 only cho Việt Nam giai đoạn 2026 - 2030".[7] | Các đơn vị thuộc Bộ | Cục Thương mại điện tử và Kinh tế số | 2030 | Mục tiêu là đạt tỷ lệ 90-100% sử dụng IPv6 vào năm 2030. Ban hành kế hoạch cụ thể để chuyển đổi hạ tầng mạng lưới, dịch vụ công, Cổng thông tin điện tử sang hỗ trợ IPv6, tiến tới tắt bỏ hoàn toàn IPv4
+3.2 | Mạng truyền số liệu chuyên dùng (TSLCD): kết nối vào Mạng truyền số liệu chuyên dùng để sử dụng, khai thác chung nhằm phục vụ phát triển kinh tế - xã hội, bảo đảm an toàn, hiệu quả, tránh lãng phí[8] | Cục Thương mại điện tử và Kinh tế số | 2026 | Mạng truyền số liệu chuyên dùng (TSLCD) của Bộ kết nối vào Mạng truyền số liệu chuyên dùng
+3.3 | Hạ tầng Điện toán đám mây (Cloud): Thực hiện chiến lược "Cloud First" (Ưu tiên đám mây). Quy hoạch và chuyển dịch hệ thống thông tin của Bộ lên các nền tảng điện toán đám mây đạt chuẩn của doanh nghiệp trong nước, hạn chế tối đa việc đầu tư phòng máy chủ nhỏ lẻ tại đơn vị[9] | Các đơn vị thuộc Bộ | Cục Thương mại điện tử và Kinh tế số | 2030 | Các hệ thống thông tin của Bộ được chuyển dịch lên các nền tảng điện toán đám mây đạt chuẩn của doanh nghiệp trong nước
+4 | Về nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực số | Về nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực số | Về nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực số | Về nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực số | Về nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực sốVề nhân lực số
+4.1 | Tập trung đào tạo đội ngũ chuyên gia về dữ liệu (Data Scientist), AI, an toàn thông tin cho cơ quan nhà nước.[10] | Vụ Tổ chức cán bộ | Cục Thương mại điện tử và kinh tế số | Thường niên và Thường xuyên | Triển khai các lớp đào tạo, bồi dưỡng hàng năm cho cán bộ, công chức, viên chức thuộc phạm vi quản lý
+4.2 | Nghiên cứu áp dụng các cơ chế đặc thù về lương, thưởng, chế độ làm việc để thu hút nhân tài CNTT vào khu vực công, dựa trên các quy định mở của Luật Chuyển đổi số[11] | Vụ Tổ chức cán bộ | 2026 | Xây dựng Kế hoạch và ban hành cơ chế của Bộ Công Thương về lương, thưởng, chế độ làm việc để thu hút nhân tài CNTT
+4.3 | Bồi dưỡng tư duy chuyển đổi số, quản trị dựa trên dữ liệu cho đội ngũ lãnh đạo các cấp[12] | Vụ Tổ chức cán bộ | Cục Thương mại điện tử và Kinh tế số | Thường niên và Thường xuyên | Triển khai các lớp đào tạo, bồi dưỡng hàng năm cho đội ngũ lãnh đạo các cấp về tư duy chuyển đổi số
+5 | Về phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệu | Về phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệu | Về phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệu | Về phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệu | Về phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệuVề phát triển dữ liệu
+5.1 | Thực hiện Chiến lược Phát triển dữ liệu của Bộ Công Thương[13] | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | 2026-2030 | Kết quả cụ thể Chiến lược Phát triển dữ liệu của Bộ Công Thương
+5.2 | Triển khai các công cụ rà soát, làm sạch, chuẩn hóa dữ liệu. Đảm bảo dữ liệu "đúng, đủ, sạch, sống". Nâng cao mức độ trưởng thành về quản trị dữ liệu lên cấp độ 4-5[14] | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | Thường xuyên | Thực hiện làm sakch, chuẩn hóa dữ liệu của Bộ
+5.2 | Triển khai các công cụ rà soát, làm sạch, chuẩn hóa dữ liệu. Đảm bảo dữ liệu "đúng, đủ, sạch, sống". Nâng cao mức độ trưởng thành về quản trị dữ liệu lên cấp độ 4-5[14] | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | Thường xuyên | Mức độ trưởng thành về quản trị dữ liệu của Bộ Công Thương đạt cấp độ 4-5
+5.3 | Cập nhật danh mục cơ sở dữ liệu mở của Bộ Công Thương [15] | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | Thường xuyên | Cơ sở dữ liệu mở của Bộ Công Thương được triển khai và cập nhật thường xuyên
+6 | Về an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạng | Về an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạng | Về an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạng | Về an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạng | Về an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạngVề an toàn thông tin mạng
+6.1 | Đảm bảo 100% hệ thống thông tin được phê duyệt cấp độ an toàn và triển khai phương án bảo vệ theo cấp độ (Mô hình 4 lớp)[16] | Các đơn vị thuộc Bộ | Cục Thương mại điện tử và Kinh tế số | Thường xuyên | Các đơn vị thuộc Bộ có hệ thống thông tin riêng trình Bộ ban hành các quyết định phê duyệt cấp độ an toàn và triển khai phương án bảo vệ theo cấp độ
+6.2 | Triển khai các giải pháp bảo vệ dữ liệu cá nhân, chống lộ lọt dữ liệu. Tuân thủ nghiêm ngặt pháp luật bảo vệ dữ liệu cá nhân | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | Thường xuyên | Các giải pháp bảo vệ dữ liệu cá nhân, chống lộ lọt dữ liệu được triển khai hiệu quả
+6.3 | Ứng dụng AI để rà quét, phát hiện và ngăn chặn tin giả, thông tin xấu độc, lừa đảo trực tuyến (Deepfake) | Cục Thương mại điện tử và Kinh tế số | Văn phòng Bộ | Thường xuyên | Triển khai vận hành công cụ AI để rà quét, phát hiện và ngăn chặn tin giả, thông tin xấu độc, lừa đảo trực tuyến (Deepfake)
+7 | Về chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ số | Về chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ số | Về chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ số | Về chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ số | Về chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ sốVề chính phủ số
+7.1 | Dịch vụ công thông minh với AI: Tích hợp AI vào Cổng dịch vụ công để hỗ trợ người dân (Trợ lý ảo hướng dẫn TTHC). Sử dụng AI để tự động hóa quy trình: Tự động điền biểu mẫu (pre-fill) từ CSDL dân cư; tự động kiểm tra tính hợp lệ của hồ sơ; tự động soạn thảo dự thảo kết quả | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | Thường xuyên | Hệ thống thông tin giải quyết thủ tục hành chính của Bộ được tích hợp AI phục vụ người dân, doanh nghiệp
+7.2 | Chỉ đạo điều hành dựa trên dữ liệu: Nâng cấp các Trung tâm giám sát, điều hành thông minh (IOC). Không chỉ dừng lại ở việc hiển thị biểu đồ thống kê (Descriptive Analytics) mà phải tiến tới phân tích dự báo (Predictive Analytics) và cảnh báo sớm các vấn đề kinh tế - xã hội. | Cục Thương mại điện tử và Kinh tế số | Thường xuyên | Tạo lập được các CSDL dùng chung, các CSDL chuyên ngành hỗ trợ cảnh báo sớm các vấn đề liên quan đến phạm vi quản lý của Bộ Công Thương
+7.3 | Triển khai "Trợ lý ảo" cho cán bộ, công chức để hỗ trợ tra cứu văn bản pháp luật, tìm kiếm thông tin, hỗ trợ ra quyết định[17] | Cục Thương mại điện tử và Kinh tế số | Các đơn vị thuộc Bộ | Thường xuyên | Đảm bảo mỗi đơn vị thuộc Bộ đều có tài khoản "Trợ lý ảo" để sử dụng
+8 | Về kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội số | Về kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội số | Về kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội số | Về kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội số | Về kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội sốVề kinh tế số và xã hội số
+8.1 | Xây dựng bộ tiêu chí và công cụ đo lường đánh giá trực tuyến về mức độ chuyển đổi số trong các ngành, lĩnh vực; (ii) đặt hàng các doanh nghiệp công nghệ số xây dựng hệ sinh thái sản phẩm, dịch vụ số gắn với các tiêu chí đo lường, đánh giá; (iii) Phát triển doanh nghiệp công nghệ số mạnh là lực lượng sản xuất tiên tiến để thúc đẩy kinh tế số ngành, lĩnh vực[18] | Cục Đổi mới sáng tạo, Chuyển đổi xanh và Khuyến công | Cục Thương mại điện tử và Kinh tế số | 2026 | Bộ tiêu chí và công cụ đo lường đánh giá trực tuyến về mức độ chuyển đổi số trong các ngành, lĩnh vực
+8.1 | Xây dựng bộ tiêu chí và công cụ đo lường đánh giá trực tuyến về mức độ chuyển đổi số trong các ngành, lĩnh vực; (ii) đặt hàng các doanh nghiệp công nghệ số xây dựng hệ sinh thái sản phẩm, dịch vụ số gắn với các tiêu chí đo lường, đánh giá; (iii) Phát triển doanh nghiệp công nghệ số mạnh là lực lượng sản xuất tiên tiến để thúc đẩy kinh tế số ngành, lĩnh vực[18] | Cục Đổi mới sáng tạo, Chuyển đổi xanh và Khuyến công | Cục Thương mại điện tử và Kinh tế số | 2026 | Báo cáo đánh giá việc các doanh nghiệp công nghiệp xây dựng hệ sinh thái sản phẩm, dịch vụ số gắn với các tiêu chí đo lường, đánh giá
+8.2 | Đo lường trực tuyến sự phát triển của kinh tế số; (ii) tổ chức triển khai thực hiện chương trình khảo sát, đo lường, đánh giá mức độ chuyển đổi số trong các ngành, lĩnh vực tại địa phương; (iii) hỗ trợ kết nối tổ chức, doanh nghiệp, hộ kinh doanh ... với hệ sinh thái sản phẩm và dịch vụ số; (iv) phát triển doanh nghiệp công nghệ số mạnh là lực lượng sản xuất tiên tiến để thúc đẩy kinh tế số ngành, lĩnh vực[19] | Cục Thương mại điện tử và Kinh tế số | Cục Quản lý và Phát triển thị trường trong nước | 2026 | - Báo cáo khảo sát, đo lường, đánh giá mức độ chuyển đổi số trong các ngành, lĩnh vực tại địa phương
+- Báo cáo phát triển doanh nghiệp công nghệ số ngành công thương
+8.3 | Lập kế hoạch để triển khai các Chương trình đẩy mạnh sản xuất thông minh, chuyển đổi số trong các lĩnh vực trọng điểm theo nhiệm vụ Chính phủ giao năm 2025 tại Nghị quyết số 71/NQ-CP ngày 01/04/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57/NQ-TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia[20] | Cục Đổi mới sáng tạo, Chuyển đổi xanh và Khuyến công | Cục Công nghiệp | 2026 | Ban hành Kế hoạch của Bộ Công Thương thực hiện Chương trình đẩy mạnh sản xuất thông minh, chuyển đổi số trong các lĩnh vực trọng điểm theo nhiệm vụ Chính phủ giao năm 2025 tại Nghị quyết số 71/NQ-CP ngày 01/04/2025 của Chính phủ sửa đổi, bổ sung, cập nhật Chương trình hành động của Chính phủ thực hiện Nghị quyết số 57/NQ-TW ngày 22/12/2024 của Bộ Chính trị về đột phá phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số quốc gia
+8.4 | Nghiên cứu, xây dựng, trình cấp có thẩm quyền xem xét ban hành các chính sách đột phá để thúc đẩy gia tăng tỷ lệ nội địa hóa, tiêu thụ sản phẩm trong nước sản xuất - tự chủ về công nghệ thuộc các lĩnh vực công nghiệp trọng điểm[21] | Cục Công nghiệp | Chính sách đột phá để thúc đẩy gia tăng tỷ lệ nội địa hóa, tiêu thụ sản phẩm trong nước sản xuất - tự chủ về công nghệ thuộc các lĩnh vực công nghiệp trọng điểm được ban hành
+9 | Nâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tin | Nâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tin | Nâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tin | Nâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tin | Nâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tinNâng cao nhận thức, tuyên truyền, truyền thông và các giải pháp khác đẩy mạnh chuyển đổi số, đảm bảo an toàn thông tin
+9.1 | Triển khai, cụ thể hóa các nội dung tuyên truyền, truyền thông về chuyển đổi số thành các chương trình, kế hoạch, chiến dịch của Bộ[22] | Báo Công Thương | Cục Thương mại điện tử và Kinh tế số | Triển khai, cụ thể hóa các nội dung tuyên truyền, truyền thông về chuyển đổi số thành các chương trình, kế hoạch, chiến dịch (thường xuyên, định kỳ, theo sự kiện, tuần lễ, ngày chuyển đổi số) với nội dung, hình thức triển khai đa dạng, phong phú, thiết thực, hiệu quả, phù hợp với điều kiện thực tế (cuộc thi, video, poster, tài liệu tuyên truyền; kênh truyền thông trực tuyến trên các phương tiện, nền tảng số, kênh truyền thông trực tiếp; lồng ghép với các hoạt động của các ngành, lĩnh vực...) để tuyên truyền, truyền thông các chủ trương, định hướng chuyển đổi số, phát triển chính phủ số, kinh tế số, xã hội số; chương trình, kế hoạch chuyển đổi số của địa phương; vai trò, lợi ích của chuyển đổi số đối với người dân, doanh nghiệp; sử dụng dịch vụ công trực tuyến; các mô hình, cách làm hay, bài toán, sáng kiến điển hình để phổ biến, nhân rộng; các hoạt động khuyến khích, thúc đẩy thi đua chuyển đổi số; gắn kết cải cách hành chính với chuyển đổi số;... để các cơ quan, tổ chức, cán bộ, công chức, người dân, doanh nghiệp nâng cao nhận thức, tích cực tham gia, đẩy mạnh hoạt động chuyển đổi số thúc đẩy phát triển kinh tế - xã hội, nâng cao chất lượng cung cấp dịch vụ cho người dân, doanh nghiệp; tuyên truyền, phòng chống lừa đảo trực tuyến, bảo vệ thông tin cá nhân...

@@ -1,0 +1,153 @@
+QUYẾT ĐỊNH
+VỀ VIỆC BAN HÀNH TÀI LIỆU HƯỚNG DẪN LẬP DỰ KIẾN CHI, ĐIỀU CHỈNH DỰ KIẾN CHI KHÁM BỆNH, CHỮA BỆNH BẢO HIỂM Y TẾ VÀ VIỆC XÁC ĐỊNH SỐ CHI KHÁM BỆNH, CHỮA BỆNH BẢO HIỂM Y TẾ VƯỢT DỰ KIẾN CHI ĐƯỢC QUỸ BẢO HIỂM Y TẾ THANH TOÁN
+BỘ TRƯỞNG BỘ Y TẾ
+Căn cứ Luật Bảo hiểm y tế ngày 14 tháng 11 năm 2008; Luật sửa đổi, bổ sung một số điều của Luật Bảo hiểm y tế ngày 13 tháng 6 năm 2014; Luật sửa đổi, bổ sung một số điều của Luật Bảo hiểm y tế ngày 27 tháng 11 năm 2024;
+Căn cứ Nghị định số 188/2025/NĐ-CP ngày 01 tháng 7 năm 2025 của Chính phủ quy định chi tiết và hướng dẫn thi hành một số điều của Luật Bảo hiểm y tế;
+Căn cứ Nghị định số 42/2025/NĐ-CP ngày 27 tháng 02 năm 2025 của Chính phủ quy định chức năng, nhiệm vụ, quyền hạn và cơ cấu tổ chức của Bộ Y tế;
+Theo đề nghị của Vụ trưởng Vụ Bảo hiểm y tế.
+QUYẾT ĐỊNH:
+Điều 1. Ban hành kèm theo Quyết định này tài liệu hướng dẫn lập dự kiến chi, điều chỉnh dự kiến chi khám bệnh, chữa bệnh bảo hiểm y tế và việc xác định số chi khám bệnh, chữa bệnh bảo hiểm y tế vượt dự kiến chi được Quỹ Bảo hiểm y tế thanh toán.
+Tài liệu này hướng dẫn kỹ thuật nghiệp vụ cho cơ sở khám bệnh, chữa bệnh, cơ quan bảo hiểm xã hội, Sở Y tế tỉnh, thành phố trực thuộc Trung ương sử dụng trong quá trình tổ chức thực hiện lập dự kiến chi, điều chỉnh dự kiến chi khám bệnh, chữa bệnh bảo hiểm y tế và xác định số chi khám bệnh, chữa bệnh bảo hiểm y tế vượt dự kiến chi được Quỹ Bảo hiểm y tế thanh toán theo quy định tại Điều 65 Nghị định số 188/2025/NĐ-CP ngày 01 tháng 7 năm 2025 của Chính phủ quy định chi tiết và hướng dẫn thi hành một số điều của Luật Bảo hiểm y tế phù hợp với thực tiễn tại địa phương, cơ sở khám bệnh, chữa bệnh.
+Tài liệu này có thể được áp dụng trong việc rà soát, xác định các chi phí vượt dự kiến chi được Quỹ bảo hiểm y tế thanh toán của năm 2024 nhưng phải bảo đảm tuân thủ theo đúng quy định tại Nghị định số 75/2023/NĐ-CP ngày 19 tháng 10 năm 2023 của Chính phủ.
+Điều 2. Quyết định này có hiệu lực kể từ ngày ký ban hành và thay thế cho Quyết định số 32/QĐ-BYT ngày 06 tháng 01 năm 2026 của Bộ trưởng Bộ Y tế về việc ban hành tài liệu hướng dẫn lập dự kiến chi, điều chỉnh dự kiến chi khám bệnh, chữa bệnh bảo hiểm y tế và việc xác định số chi khám bệnh, chữa bệnh bảo hiểm y tế vượt dự kiến chi được Quỹ Bảo hiểm y tế thanh toán.
+Điều 3. Chánh Văn phòng Bộ, các Vụ trưởng, Cục trưởng các đơn vị thuộc Bộ Y tế; thủ trưởng cơ quan bảo hiểm xã hội, cơ quan quản lý y tế Bộ, ngành; giám đốc Sở Y tế các tỉnh, thành phố trực thuộc Trung ương; giám đốc các cơ sở khám bệnh, chữa bệnh bảo hiểm y tế trong toàn quốc và các tổ chức, cá nhân có liên quan chịu trách nhiệm thi hành Quyết định này./.
+TÀI LIỆU HƯỚNG DẪN
+VIỆC LẬP DỰ KIẾN CHI, ĐIỀU CHỈNH DỰ KIẾN CHI KHÁM BỆNH, CHỮA BỆNH BẢO HIỂM Y TẾ VÀ XÁC ĐỊNH SỐ CHI KHÁM BỆNH, CHỮA BỆNH BẢO HIỂM Y TẾ VƯỢT DỰ KIẾN CHI ĐƯỢC QUỸ BẢO HIỂM Y TẾ THANH TOÁN
+(Ban hành kèm theo Quyết định số 582/QĐ-BYT ngày 09 tháng 3 năm 2026 của Bộ trưởng Bộ Y tế)
+I. Lập dự kiến chi khám bệnh, chữa bệnh (KCB) bảo hiểm y tế (BHYT)
+1. Căn cứ lập
+a) Điểm c khoản 2 Điều 65 Nghị định số 188/2025/NĐ-CP ngày 01 tháng 7 năm 2025 của Chính phủ quy định chi tiết và hướng dẫn thi hành một số điều của Luật BHYT;
+b) Tình hình thanh toán, quyết toán chi phí KCB BHYT năm trước (năm n-1) và ước thực hiện năm hiện hành (năm n);
+c) Chức năng, nhiệm vụ, phạm vi hoạt động chuyên môn, phương hướng phát triển của cơ sở KCB để xác định các yếu tố tác động làm tăng hoặc giảm chi phí KCB BHYT như thay đổi cơ cấu bệnh tật, quy mô, phạm vi hoạt động của cơ sở KCB, việc triển khai dịch vụ kỹ thuật mới, phương pháp mới, cập nhật, cải tiến, áp dụng các phác đồ, hướng dẫn chẩn đoán và điều trị mới do Bộ Y tế hoặc cơ sở KCB ban hành, việc thay đổi chế độ tiền lương, thay đổi giá dịch vụ KCB, giá thuốc, hoá chất, công cụ, dụng cụ, thiết bị y tế, khí y tế, máu và chế phẩm máu, ứng dụng công nghệ thông tin, chuyển đổi số, cải tiến, nâng cao chất lượng và các chi phí quản lý, các thay đổi về phạm vi được hưởng và mức hưởng của người tham gia BHYT, dịch bệnh truyền nhiễm, thiên tai thảm họa và các yếu tố khách quan khác, các thay đổi về chính sách, pháp luật và các chi phí khác có liên quan đến công tác KCB BHYT.
+2. Thời gian lập và gửi
+Trước ngày 10 tháng 7 hằng năm, cơ sở KCB lập dự kiến chi KCB BHYT của năm kế hoạch (năm n+1) gửi cơ quan Bảo hiểm xã hội (BHXH) nơi ký hợp đồng KCB BHYT, đồng thời gửi tỉnh, thành phố trực thuộc Trung ương (Sở Y tế) nơi ký hợp đồng KCB BHYT đối với các cơ sở KCB trực thuộc Sở Y tế, cơ sở KCB tư nhân trên địa bàn hoặc gửi cơ quan quản lý y tế của bộ, ngành đối với cơ sở KCB trực thuộc bộ, ngành để biết và cùng theo dõi.
+3. Phương pháp xác định
+Số dự kiến chi KCB BHYT của năm n+1 bằng (=) Số dự kiến chi KCB BHYT ngoại trú của năm n+1 cộng (+) Số dự kiến chi KCB BHYT nội trú của năm n+1 tại cơ sở KCB. Trong đó:
+3.1. Số dự kiến chi KCB BHYT ngoại trú năm n+1 được xác định:
+a) (1) Dự kiến số lượt KCB BHYT ngoại trú của năm (n+1) được xác định như sau:
+Trong đó:
+(*) Ước số lượt KCB BHYT ngoại trú của năm n bằng (=) Số lượt KCB BHYT ngoại trú thực tế 6 tháng đầu năm n cộng (+) Ước số lượt KCB BHYT ngoại trú 6 tháng cuối năm n.
+Ước số lượt KCB BHYT ngoại trú 6 tháng cuối năm n xác định:
+Ghi chú:
+- Đối với cơ sở KCB mới ký hợp đồng KCB BHYT trong tháng 1 năm n và không đủ số liệu lịch sử về hoạt động KCB BHYT của năm n-1 thì ước số lượt KCB BHYT ngoại trú của 6 tháng cuối năm n bằng số lượt KCB BHYT ngoại trú thực tế của 6 tháng đầu năm n.
+- Đối với cơ sở KCB mới ký hợp đồng KCB BHYT, không đủ số liệu lịch sử về hoạt động KCB BHYT của năm n-1 và 6 tháng đầu năm n thì ước số lượt KCB BHYT ngoại trú của 6 tháng cuối năm n bằng số lượt KCB BHYT ngoại trú bình quân các tháng đã thực hiện trong 6 tháng đầu năm n nhân (x) 6 tháng.
+(**) Dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của năm n+1 được xác định
+Trường hợp cơ sở KCB lần đầu ký hợp đồng KCB BHYT, không đủ số liệu lịch sử thì dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của năm n+1 được xác định bằng 1.
+b) (2) Dự kiến chi phí bình quân lượt KCB BHYT ngoại trú của năm (n+1) được xác định:
+(*) Số ước chi KCB BHYT ngoại trú của năm n
+Ước chi KCB BHYT ngoại trú của năm n tại cơ sở KCB bằng (=) Số chi KCB BHYT ngoại trú của 6 tháng đầu năm n cộng (+) Ước chi KCB BHYT ngoại trú của 6 tháng cuối năm n.
+- Số chi KCB BHYT ngoại trú của 6 tháng đầu năm n là số chi KCB BHYT ngoại trú tại cơ sở KCB đã được cơ quan BHXH giám định tổng hợp vào quyết toán chi KCB BHYT ngoại trú quý I cộng (+) số chi KCB BHYT ngoại trú mà cơ sở KCB đề nghị quyết toán quý II của năm n.
+- Ước chi KCB BHYT ngoại trú của 6 tháng cuối năm n được xác định như sau:
+(1) Ước số lượt KCB BHYT ngoại trú của 6 tháng cuối năm n được xác định theo công thức đã nêu ở phần trên.
+(2) Ước chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n được xác định như sau:
+Trong đó:
+Lưu ý:
+- Trường hợp trong thời gian  6 tháng đầu năm n có điều chỉnh giá dịch vụ KCB BHYT thì chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n được xác định như sau:
+Trong đó, tháng có sự điều chỉnh giá dịch vụ KCB BHYT được tính tròn tháng.
+Ghi chú:
+- Đối với cơ sở KCB mới ký hợp đồng KCB BHYT, không đủ số liệu lịch sử của 6 tháng cuối năm n-1 thì ước số lượt người KCB BHYT ngoại trú của 6 tháng cuối năm n và ước chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n bằng số lượt người KCB BHYT ngoại trú của 6 tháng đầu năm n và ước chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng đầu năm n. Nếu chưa đủ dữ liệu 6 tháng đầu năm n thì số lượt KCB BHYT của 6 tháng đầu năm n được tính theo ghi chú nêu tại điểm a mục này.
+(**) Ước số lượt KCB BHYT ngoại trú của năm n: Đã được xác định theo công thức nêu ở phần trên.
+(***) Dự kiến tỷ lệ % tăng giảm chi phí bình quân KCB BHYT ngoại trú của năm n+1 được xác định:
+Lưu ý: Đối với cơ sở KCB mới được ký hợp đồng KCB BHYT, không đủ số liệu lịch sử của năm n-1 thì tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của năm n+1 và tỷ lệ % tăng hoặc giảm chi phí bình quân KCB BHYT ngoại trú của năm n+1 được xác định bằng 1 (không có sự tăng giảm).
+3.2. Số dự kiến chi KCB BHYT nội trú của năm n+1 (bao gồm cả điều trị ban ngày)
+Phương pháp xác định số dự kiến chi KCB BHYT nội trú của năm n+1 tương tự như đối với số dự kiến chi KCB ngoại trú của năm n+1.
+3.3. Trường hợp cơ sở khám bệnh, chữa bệnh mới ký hợp đồng khám bệnh, chữa bệnh bảo hiểm y tế với cơ quan bảo hiểm xã hội hoặc các cơ sở khám bệnh, chữa bệnh được sắp xếp, sáp nhập, tổ chức lại, các bên có liên quan tham khảo và xác định số dự kiến chi, điều chỉnh số dự kiến chi khám bệnh, chữa bệnh bảo hiểm y tế dựa trên mô hình của cơ sở khám bệnh, chữa bệnh bảo hiểm y tế tương đồng trên địa bàn tỉnh, thành phố hoặc các tỉnh giáp ranh hoặc trên toàn quốc hoặc của các cơ sở trước khi sắp xếp, sáp nhập, tổ chức lại.
+II. Điều chỉnh dự kiến chi KCB BHYT (năm n) tại cơ sở KCB BHYT
+1. Căn cứ lập
+a) Thông báo của BHXH cấp tỉnh về số dự kiến chi KCB BHYT của năm n;
+b) Số chi KCB BHYT thực tế năm trước liền kề;
+c) Số chi KCB BHYT quý I, quý II tại cơ sở KCB đã được cơ quan BHXH giám định và tổng hợp vào quyết toán và số chi KCB BHYT mà cơ sở KCB đề nghị quyết toán quý III của năm n;
+d) Dự kiến tăng giảm về số lượt KCB, chi phí bình quân KCB BHYT, các thay đổi trong năm như thay đổi chức năng, nhiệm vụ, phạm vi hoạt động chuyên môn, phương hướng phát triển của cơ sở KCB để xác định các yếu tố tác động làm tăng hoặc giảm chi phí KCB BHYT như thay đổi cơ cấu bệnh tật, quy mô, phạm vi hoạt động của cơ sở KCB, việc triển khai dịch vụ kỹ thuật mới, phương pháp mới, cập nhật, cải tiến, áp dụng các phác đồ, hướng dẫn chẩn đoán và điều trị mới do Bộ Y tế hoặc cơ sở KCB ban hành, việc thay đổi chế độ tiền lương, thay đổi giá dịch vụ KCB, giá thuốc, hoá chất, công cụ, dụng cụ, thiết bị y tế, khí y tế, máu và chế phẩm máu, ứng dụng công nghệ thông tin, chuyển đổi số, cải tiến, nâng cao chất lượng và các chi phí quản lý, các thay đổi về phạm vi được hưởng và mức hưởng của người tham gia BHYT, dịch bệnh truyền nhiễm, thiên tai thảm họa và các yếu tố khách quan khác, các thay đổi về chính sách, pháp luật và các chi phí khác có liên quan đến công tác KCB BHYT.
+2. Thời gian lập và gửi
+- Cơ sở KCB BHYT có văn bản gửi cơ quan BHXH nơi ký hợp đồng KCB BHYT để tổng hợp, điều chỉnh trong phạm vi dự toán được giao của BHXH cấp tỉnh hoặc để BHXH cấp tỉnh tổng hợp gửi BHXH Việt Nam để điều chỉnh trong phạm vi dự toán được Thủ tướng Chính phủ giao; đồng thời gửi Sở Y tế nơi ký hợp đồng đối với các cơ sở KCB trực thuộc Sở Y tế, cơ sở KCB tư nhân trên địa bàn hoặc gửi cơ quan quản lý y tế của bộ, ngành đối với cơ sở KCB trực thuộc bộ, ngành để biết và theo dõi, quản lý.
+- Thời gian gửi: Trước ngày 15 tháng 10 của năm n.
+3. Phương pháp xác định
+Ước dự kiến chi KCB BHYT của năm n bằng (=) Số chi KCB BHYT quý I và quý II đã được cơ quan BHXH giám định và tổng hợp vào quyết toán của năm n cộng (+) Số chi KCB BHYT đề nghị quyết toán quý III của năm n cộng (+) Ước chi KCB BHYT quý IV của năm n.
+Trong đó:
+3.1. Số chi KCB BHYT đề nghị quyết toán quý III của năm n là toàn bộ số chi KCB BHYT của quý III đã sử dụng theo đúng quy định của pháp luật và nằm trong phạm vi được hưởng, mức hưởng của người bệnh BHYT mà cơ sở KCB đã tổng hợp, gửi báo cáo quyết toán cho cơ quan BHXH.
+3.2. Ước chi KCB BHYT quý IV của năm n:
+Ước chi KCB BHYT quý IV của năm n bằng (=)Ước chi KCB BHYT ngoại trú quý IV của năm n cộng (+) Ước chi KCB BHYT nội trú quý IV của năm n. Trong đó:
+a) Ước chi KCB BHYT ngoại trú quý IV của năm n
+(1) Ước số lượt người KCB BHYT ngoại trú quý IV năm n:
+2) Ước chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n được xác định:
+Trong đó:
+Lưu ý:
+- Trường hợp trong thời gian 9 tháng đầu năm n có điều chỉnh giá dịch vụ KCB BHYT thì chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n được xác định như sau:
+Trong đó, tháng có sự điều chỉnh giá dịch vụ KCB BHYT được tính tròn tháng.
+- Đối với cơ sở KCB lần đầu ký hợp đồng KCB BHYT, không đủ số liệu lịch sử quý IV của năm n-1 thì ước số lượt người KCB BHYT ngoại trú quý IV của năm n và ước chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n bằng số lượt người KCB BHYT ngoại trú quý III của năm n và chi phí bình quân lượt KCB BHYT ngoại trú quý III của năm n.
+b) Ước chi KCB BHYT nội trú quý IV của năm n (bao gồm cả điều trị ban ngày)
+Phương pháp xác định ước chi KCB BHYT nội trú quý IV của năm n tương tự như xác định ước chi KCB BHYT ngoại trú quý IV của năm n.
+c) Trường hợp cơ sở khám bệnh, chữa bệnh mới ký hợp đồng khám bệnh, chữa bệnh bảo hiểm y tế với cơ quan bảo hiểm xã hội hoặc các cơ sở khám bệnh, chữa bệnh được sắp xếp, sáp nhập, tổ chức lại theo địa giới hành chính, các bên có liên quan tham khảo và xác định số dự kiến chi, điều chỉnh số dự kiến chi khám bệnh, chữa bệnh bảo hiểm y tế dựa trên mô hình của cơ sở khám bệnh, chữa bệnh bảo hiểm y tế tương đồng trên địa bàn tỉnh, thành phố hoặc các tỉnh giáp ranh hoặc trên toàn quốc hoặc của các cơ sở trước khi sắp xếp, sáp nhập, tổ chức lại.
+III. Xác định số chi KCB BHYT vượt dự kiến chi được quỹ BHYT thanh toán
+1. Trình tự thực hiện
+a) Hằng tháng, cơ quan bảo hiểm xã hội có trách nhiệm thực hiện quy định tại điểm d khoản 9 Điều 71 Nghị định số 188/2025/NĐ-CP: Chủ động rà soát, phát hiện và gửi thông tin cảnh báo kịp thời cho cơ sở khám bệnh, chữa bệnh bảo hiểm y tế về các chi phí khám bệnh, chữa bệnh bảo hiểm y tế trong tháng, trong quý tăng cao so với mức chi phí bình quân của cơ sở khám bệnh, chữa bệnh cùng cấp chuyên môn kỹ thuật, cùng loại hình cơ sở khám bệnh, chữa bệnh đa khoa hoặc chuyên khoa;
+b) Cơ sở khám bệnh, chữa bệnh có trách nhiệm thực hiện quy định tại điểm đ khoản 2 Điều 35 Nghị định số 188/2025/NĐ-CP: Chủ động, kịp thời rà soát, kiểm tra các chi phí khám bệnh, chữa bệnh bảo hiểm y tế tăng cao tại cơ sở theo kiến nghị, cảnh báo của cơ quan bảo hiểm xã hội; xác định nguyên nhân chủ quan, khách quan, xây dựng và tổ chức thực hiện các giải pháp để khắc phục các nguyên nhân chủ quan, bất cập (nếu có), gửi văn bản thông báo về việc rà soát và các giải pháp khắc phục đã triển khai tới cơ quan bảo hiểm xã hội nơi ký hợp đồng;
+c) Trong thời hạn 15 ngày kể từ ngày cơ quan bảo hiểm xã hội thông báo số quyết toán quý IV và số chi vượt dự kiến chi, cơ sở KCB rà soát, có văn bản thuyết minh các nguyên nhân tác động đến số chi KCB BHYT vượt so với số dự kiến chi, gửi cơ quan BHXH nơi ký hợp đồng và Sở Y tế nơi ký hợp đồng;
+d) Cơ quan BHXH chủ trì, phối hợp với Sở Y tế và cơ sở KCB:
+- Rà soát các nguyên nhân tác động đến việc vượt số dự kiến chi KCB BHYT theo thuyết minh của cơ sở KCB;
+- Rà soát các chi phí tăng cao và nội dung thuyết minh, các giải pháp của cơ sở KCB đối với các chi phí tăng cao hơn so với mức tăng bình quân của các cơ sở KCB cùng cấp chuyên môn kỹ thuật, cùng loại hình cơ sở KCB đa khoa hoặc chuyên khoa trên địa bàn tỉnh, thành phố trực thuộc Trung ương hoặc toàn quốc hoặc tăng hơn mức tăng bình quân của cơ sở KCB đó cùng kỳ năm trước;
+- Rà soát các kết luận kiểm tra, thanh tra, kiểm toán, xử phạt vi phạm hành chính (nếu có) có liên quan tới chi phí KCB BHYT của cơ sở KCB;
+- Trên cơ sở rà soát các nội dung nêu trên, thống nhất xác định các chi phí KCB BHYT vượt số dự kiến chi được quỹ BHYT thanh toán theo nguyên tắc quy định tại Điều 65 Nghị định số 188/2025/NĐ-CP;
+đ) Cơ quan BHXH thực hiện quyết toán, thanh toán cho cơ sở KCB theo quy định của pháp luật;
+e) Trường hợp không thống nhất được chi phí KCB BHYT vượt dự kiến chi được quỹ BHYT thanh toán, cơ sở KCB kiến nghị BHXH cấp tỉnh, Sở Y tế để xem xét hoặc tổng hợp gửi Bộ Y tế để giải quyết theo quy định của pháp luật.
+2. Thời gian rà soát, xác định các khoản chi vượt dự kiến chi được quỹ BHYT thanh toán
+Chậm nhất từ ngày 16/3 (thời điểm chậm nhất cơ quan BHXH thông báo kết quả giám định và số quyết toán chi phí KCB BHYT quý IV cho cơ sở KCB theo quy định tại Điều 32 Luật Bảo hiểm y tế) cho đến hết ngày 31/5 hàng năm.
+3. Nguyên tắc xác định các khoản chi vượt dự kiến chi được quỹ BHYT thanh toán
+a) Khoản chi phát sinh trong phạm vi được hưởng và mức hưởng của người tham gia BHYT, đúng đối tượng, đúng quy định của pháp luật về KCB, quy định về BHYT;
+b) Khoản chi có đầy đủ hồ sơ, chứng từ hợp pháp theo quy định của pháp luật chứng minh chi phí thực tế phát sinh trong quá trình KCB cho người bệnh BHYT;
+c) Các khoản chi này đã được cơ quan BHXH giám định và xác định đủ điều kiện quyết toán, thanh toán;
+d) Chi phí vượt dự kiến chi được xác định là do nguyên nhân khách quan:
+- Số lượt người KCB BHYT ngoại trú, nội trú tăng so với năm trước liền kề;
+- Trường hợp chi phí bình quân lượt KCB ngoại trú hoặc nội trú tăng cao hơn so với mức chi phí bình quân của cơ sở KCB cùng cấp chuyên môn kỹ thuật, cùng loại hình cơ sở KCB đa khoa hoặc chuyên khoa trong năm trên địa bàn tỉnh, thành phố trực thuộc Trung ương hoặc toàn quốc hoặc tăng hơn mức tăng bình quân của cơ sở khám bệnh, chữa bệnh đó cùng kỳ năm trước thì cơ quan BHXH có văn bản cảnh báo, cung cấp kịp thời, đầy đủ thông tin cho cơ sở KCB. Sau khi đã kiểm tra, rà soát theo quy định tại khoản 3 Điều 65 Nghị định số 188/2025/NĐ- CP, nếu chi phí KCB BHYT vượt dự kiến chi được xác định thực hiện theo đúng quy định pháp luật về KCB và BHYT thì được xác định là chi phí vượt dự kiến chi do nguyên nhân khách quan, được quỹ BHYT thanh toán;
+- Số dự kiến chi KCB BHYT được cơ quan BHXH thông báo đầu năm hoặc số được thông báo điều chỉnh cuối năm thấp hơn so với số dự kiến chi được cơ sở KCB xác định thông qua phương pháp tính hướng dẫn tại tài liệu này gửi cơ quan bảo hiểm xã hội;
+- Các nguyên nhân khách quan thay đổi trong năm như thay đổi chức năng, nhiệm vụ, phạm vi hoạt động chuyên môn, phương hướng phát triển của cơ sở KCB để xác định các yếu tố tác động làm tăng hoặc giảm chi phí KCB BHYT như thay đổi cơ cấu bệnh tật, quy mô, phạm vi hoạt động của cơ sở KCB, việc triển khai dịch vụ kỹ thuật mới, phương pháp mới, cập nhật, cải tiến, áp dụng các phác đồ, hướng dẫn chẩn đoán và điều trị mới do Bộ Y tế hoặc cơ sở KCB ban hành, việc thay đổi chế độ tiền lương, thay đổi giá dịch vụ KCB, giá thuốc, hoá chất, công cụ, dụng cụ, thiết bị y tế, khí y tế, máu và chế phẩm máu, ứng dụng công nghệ thông tin, chuyển đổi số, cải tiến, nâng cao chất lượng và các chi phí quản lý, các thay đổi về phạm vi được hưởng và mức hưởng của người tham gia BHYT, dịch bệnh truyền nhiễm, thiên tai thảm họa và các yếu tố khách quan khác, các thay đổi về chính sách, pháp luật và các chi phí khác có liên quan đến công tác KCB BHYT./.
+BỘ Y TẾ
+-------- | CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+---------------
+Số: 582/QĐ-BYT | Hà Nội, ngày 09 tháng 3 năm 2026
+Nơi nhận:
+- Như Điều 3;
+- Phó TTCP Lê Thành Long (để báo cáo);
+- Bộ trưởng Bộ Y tế (để báo cáo);
+- Các đồng chí Thứ trưởng Bộ Y tế;
+- Bộ Tài chính;
+- Bộ Quốc phòng;
+- Bộ Công an;
+- BHXH Việt Nam - Bộ Tài chính;
+- Hiệp hội Bệnh viện tư nhân Việt Nam;
+- Cổng Thông tin điện tử Bộ Y tế;
+- Lưu: VT, BH. | KT. BỘ TRƯỞNG
+THỨ TRƯỞNG THƯỜNG TRỰC
+
+Vũ Mạnh Hà
+Số dự kiến chi KCB BHYT ngoại trú của năm n+1 | = | Dự kiến số lượt KCB BHYT ngoại trú của năm n+1 (1) | x | Dự kiến chi phí bình quân lượt KCB BHYT ngoại trú của năm n+1 (2)
+Dự kiến số lượt KCB BHYT ngoại trú của năm n+1 | = | Ước số lượt KCB BHYT ngoại trú của năm n (*) | x | Dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của năm n+1(**)
+Ước số lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Số lượt KCB BHYT ngoại trú của 6 tháng cuối năm n-1 | x | Dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của 6 tháng cuối năm n
+Dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Tổng số lượt KCB BHYT ngoại trú của 6 tháng đầu năm n
+Dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Tổng số lượt KCB BHYT ngoại trú của 6 tháng đầu năm n-1
+Dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của năm n+1 | = | Ước số lượt KCB BHYT ngoại trú của năm n
+Dự kiến tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú của năm n+1 | = | Số lượt KCB BHYT ngoại trú của năm n-
+Dự kiến chi phí bình quân lượt KCB BHYT ngoại trú của năm n+1 | = | Ước số chi KCB BHYT ngoại trú của năm n(*) | x | Dự kiến tỷ lệ % tăng hoặc giảm chi phí bình quân KCB BHYT ngoại trú của năm n+1(***)
+Dự kiến chi phí bình quân lượt KCB BHYT ngoại trú của năm n+1 | = | Ước số lượt KCB BHYT ngoại trú của năm n(**) | x | Dự kiến tỷ lệ % tăng hoặc giảm chi phí bình quân KCB BHYT ngoại trú của năm n+1(***)
+Ước chi KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Ước số lượt KCB BHYT ngoại trú của 6 tháng cuối năm n (1) | x | Ước chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n (2)
+Ước chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n-1 | x | Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n
+Chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n-1 | = | Tổng chi phí KCB BHYT ngoại trú đã được giám định của 6 tháng cuối năm n-1
+Chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n-1 | = | Tổng số lượt KCB BHYT ngoại trú của 6 tháng cuối năm n-1
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng đầu năm n
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú 6 tháng đầu năm n-1
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú của các tháng đầu năm n chưa điều chỉnh giá | x   (1 + | Chi phí KCB BHYT ngoại trú gia tăng do giá dịch vụ KCB BHYT của các tháng được điều chỉnh giá dịch vụ KCB tính từ tháng điều chỉnh đến tháng 6 năm n | )
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của 6 tháng cuối năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú các tháng đầu năm n-1 tương ứng | x   (1 + | Chi phí KCB BHYT ngoại trú của các tháng được điều chỉnh giá dịch vụ KCB BHYT đến tháng 6 năm n | )
+Dự kiến tỷ lệ % tăng hoặc giảm chi phí bình quân KCB BHYT ngoại trú của năm n+1 | = | Ước chi bình quân KCB BHYT ngoại trú của năm n
+Dự kiến tỷ lệ % tăng hoặc giảm chi phí bình quân KCB BHYT ngoại trú của năm n+1 | = | Chi phí bình quân KCB BHYT ngoại trú của năm n-1 đã được cơ quan BHYT giám định
+Ước chi KCB BHYT ngoại trú quý IV của năm n | = | Ước số lượt người KCB BHYT ngoại trú quý IV của năm n(1) | x | Ước chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n(2)
+Ước số lượt người KCB BHYT ngoại trú quý IV của năm n | = | Số lượt KCB BHYT ngoại x trú quý IV của năm n-1 | x | Ước tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú quý IV của năm n
+Ước tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú quý IV của năm n | = | Tổng số lượt người KCB BHYT ngoại trú quý I, II, III của năm n
+Ước tỷ lệ % tăng hoặc giảm lượt KCB BHYT ngoại trú quý IV của năm n | = | Tổng số lượt người KCB BHYT ngoại trú quý I, II, III của năm n-1
+Ước chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n-1 | x | Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của quý IV của năm n
+Chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n-1 | = | Tổng chi phí KCB BHYT ngoại trú quý IV đã được giám định của năm n-1
+Chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n-1 | = | Tổng số lượt KCB BHYT ngoại trú quý IV của năm n-1
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú quý I, II, III của năm n
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú quý IV của năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú quý I, II, III của năm n-1
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của Quý IV năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú của các tháng đầu năm n chưa điều chỉnh giá | x   (1 + | Chi phí KCB BHYT ngoại trú gia tăng do giá dịch vụ KCB BHYT của các tháng được điều chỉnh giá dịch vụ KCB tính từ tháng điều chỉnh đến hết tháng 9 năm n | )
+Ước tỷ lệ % tăng hoặc giảm chi phí bình quân lượt KCB BHYT ngoại trú của Quý IV năm n | = | Chi phí bình quân lượt KCB BHYT ngoại trú các tháng đầu năm n-1 tương ứng | x   (1 + | Chi phí KCB BHYT ngoại trú của các tháng được điều chỉnh giá dịch vụ KCB BHYT đến hết tháng 9 năm n | )

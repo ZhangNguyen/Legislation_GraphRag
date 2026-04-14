@@ -1,0 +1,110 @@
+THÔNG TƯ
+QUY ĐỊNH VIỆC CUNG CẤP THÔNG TIN GIỮA NGÂN HÀNG NHÀ NƯỚC VIỆT NAM VÀ BẢO HIỂM TIỀN GỬI VIỆT NAM
+Căn cứ Luật Ngân hàng Nhà nước Việt Nam số 46/2010/QH12;
+Căn cứ Luật Bảo hiểm tiền gửi số 111/2025/QH15;
+Căn cứ Nghị định số 26/2025/NĐ-CP của Chính phủ quy định chức năng, nhiệm vụ, quyền hạn và cơ cấu tổ chức của Ngân hàng Nhà nước Việt Nam;
+Theo đề nghị của Cục trưởng Cục An toàn hệ thống các tổ chức tín dụng;
+Thống đốc Ngân hàng Nhà nước Việt Nam ban hành Thông tư quy định việc cung cấp thông tin giữa Ngân hàng Nhà nước Việt Nam và Bảo hiểm tiền gửi Việt Nam.
+Chương I
+QUY ĐỊNH CHUNG
+Điều 1. Phạm vi điều chỉnh
+Thông tư này quy định nguyên tắc, phạm vi, nội dung và phương thức cung cấp thông tin giữa Ngân hàng Nhà nước Việt Nam (sau đây gọi là Ngân hàng Nhà nước) và Bảo hiểm tiền gửi Việt Nam.
+Điều 2. Đối tượng áp dụng
+1. Ngân hàng Nhà nước.
+2. Bảo hiểm tiền gửi Việt Nam.
+3. Các tổ chức, cá nhân khác có liên quan đến hoạt động bảo hiểm tiền gửi.
+Điều 3. Nguyên tắc cung cấp, sử dụng và quản lý thông tin
+1. Bảo đảm tính toàn vẹn, kịp thời của thông tin được cung cấp.
+2. Việc cung cấp, sử dụng, quản lý và bảo mật thông tin theo quy định của pháp luật
+3. Bên được cung cấp thông tin sử dụng thông tin phục vụ cho việc thực hiện chức năng, nhiệm vụ được giao.
+4. Bảo hiểm tiền gửi Việt Nam không được cung cấp cho bên thứ ba thông tin được Ngân hàng Nhà nước cung cấp, trừ trường hợp cung cấp thông tin cho cơ quan nhà nước có thẩm quyền theo quy định của pháp luật hoặc theo chỉ đạo của Thống đốc Ngân hàng Nhà nước.
+Chương II
+QUY ĐỊNH CỤ THỂ
+Điều 4. Phạm vi cung cấp thông tin
+1. Bảo hiểm tiền gửi Việt Nam được Ngân hàng Nhà nước cung cấp, cho phép khai thác các thông tin, báo cáo theo Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+2. Trường hợp để thực hiện chức năng, nhiệm vụ, Bảo hiểm tiền gửi Việt Nam có văn bản đề nghị Ngân hàng Nhà nước xem xét, cung cấp thông tin, báo cáo khác chưa được quy định tại Quyết định của Thống đốc Ngân hàng Nhà nước quy định tại khoản 1 Điều này.
+3. Bảo hiểm tiền gửi Việt Nam báo cáo Ngân hàng Nhà nước các thông tin theo Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+4. Khi cần thiết, Bảo hiểm tiền gửi Việt Nam cung cấp thông tin, báo cáo khác chưa được quy định tại khoản 3 Điều này theo yêu cầu bằng văn bản của Ngân hàng Nhà nước.
+Điều 5. Phương thức cung cấp thông tin
+1. Phương thức cung cấp thông tin giữa Ngân hàng Nhà nước Việt Nam và Bảo hiểm tiền gửi Việt Nam thực hiện theo quy định tại Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+2. Đối với các thông tin, báo cáo được chia sẻ từ Ngân hàng Nhà nước theo phương thức điện tử, Bảo hiểm tiền gửi Việt Nam được khai thác theo hướng dẫn của Cục Công nghệ thông tin.
+Điều 6. Nối mạng và quy trình cung cấp thông tin bằng điện tử
+1. Trụ sở chính của Bảo hiểm tiền gửi Việt Nam nối mạng truyền tin với Ngân hàng Nhà nước (Cục Công nghệ thông tin), phải có phương án dự phòng để đảm bảo nhận và gửi thông tin báo cáo với Ngân hàng Nhà nước.
+2. Trường hợp hệ thống truyền dữ liệu có sự cố, Bảo hiểm tiền gửi Việt Nam nhận và gửi báo cáo điện tử với Ngân hàng Nhà nước (Cục Công nghệ thông tin) trực tiếp thông qua vật mang tin.
+Điều 7. Tra soát và điều chỉnh thông tin
+1. Khi bên được cung cấp thông tin phát hiện sai sót hoặc bất hợp lý về thông tin được cung cấp, bên được cung cấp thông tin có văn bản gửi bên cung cấp thông tin đề nghị tra soát hoặc làm rõ.
+2. Trong thời hạn 15 ngày kể từ ngày nhận được đề nghị tra soát, bên cung cấp thông tin có trách nhiệm kiểm tra thông tin và phản hồi cho bên được cung cấp thông tin.
+3. Khi có sự điều chỉnh thông tin đã cung cấp, bên cung cấp thông tin chủ động gửi lại thông tin đã được điều chỉnh cho bên được cung cấp thông tin trong phạm vi 02 ngày làm việc kể từ ngày thông tin đã cung cấp được điều chỉnh.
+4. Bên cung cấp thông tin có trách nhiệm giải thích, làm rõ thông tin khi có yêu cầu của bên được cung cấp thông tin.
+Điều 8. Thời hạn gửi thông tin
+1. Thời hạn gửi thông tin, báo cáo được quy định cụ thể tại Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+2. Nếu ngày quy định cuối cùng của thời hạn gửi thông tin, báo cáo trùng với ngày nghỉ lễ, nghỉ Tết hoặc ngày nghỉ cuối tuần, thì ngày gửi thông tin, báo cáo là ngày làm việc tiếp theo ngay sau ngày đó.
+3. Trường hợp thông tin, báo cáo gửi bằng văn bản, ngày gửi thông tin, báo cáo thực tế được tính là ngày ghi trên dấu của bưu điện nơi tiếp nhận thông tin, báo cáo gửi đi. Trường hợp thông tin, báo cáo gửi qua kênh báo cáo điện tử, ngày gửi thông tin, báo cáo là ngày truyền file báo cáo thành công.
+4. Trường hợp khẩn cấp hoặc đột xuất, đơn vị phải gửi thông tin, báo cáo qua fax hoặc hộp thư điện tử đã được đăng ký với Ngân hàng Nhà nước. Sau khi gửi thông tin, báo cáo qua fax hoặc hộp thư điện tử đã được đăng ký, đơn vị báo cáo có trách nhiệm gửi thông tin, báo cáo chính thức theo quy định tại Điều 5 Thông tư này. Ngày gửi thông tin, báo cáo thực tế được tính là ngày chuyển thông tin, báo cáo qua fax hoặc hộp thư điện tử đã đăng ký.
+Điều 9. Khai thác thông tin tại các đơn vị thuộc Ngân hàng Nhà nước
+1. Các đơn vị thuộc Ngân hàng Nhà nước (ngoài các đơn vị nhận báo cáo quy định tại Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam) trong phạm vi chức năng, nhiệm vụ có nhu cầu khai thác các thông tin báo cáo của Bảo hiểm tiền gửi Việt Nam phải đăng ký bằng văn bản với Cục Quản lý, giám sát tổ chức tín dụng để tổng hợp, trình Thống đốc Ngân hàng Nhà nước phê duyệt.
+2. Các đơn vị, cá nhân thuộc đơn vị được phép khai thác thông tin, báo cáo chịu trách nhiệm quản lý, sử dụng thông tin, báo cáo đúng mục đích, bảo mật thông tin theo quy định của pháp luật.
+Điều 10. Trách nhiệm của các đơn vị thuộc Ngân hàng Nhà nước
+1. Trách nhiệm của Cục Quản lý, giám sát tổ chức tín dụng:
+a) Chủ trì, phối hợp với các đơn vị liên quan cung cấp thông tin cho Bảo hiểm tiền gửi Việt Nam theo quy định tại Thông tư này, Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam; Đầu mối tiếp nhận yêu cầu bằng văn bản của Bảo hiểm tiền gửi Việt Nam đối với các thông tin, báo cáo khác quy định tại khoản 2 Điều 4 Thông tư này để trình Thống đốc Ngân hàng Nhà nước xử lý, trả lời Bảo hiểm tiền gửi Việt Nam;
+b) Đầu mối, phối hợp với các đơn vị thuộc Ngân hàng Nhà nước, Bảo hiểm tiền gửi Việt Nam xây dựng, trình Thống đốc Ngân hàng Nhà nước ban hành, sửa đổi, bổ sung Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam;
+c) Tiếp nhận các kiến nghị bằng văn bản về thực hiện Thông tư này, phối hợp với các đơn vị liên quan để trả lời cho Bảo hiểm tiền gửi Việt Nam; Theo dõi việc xử lý kiến nghị của các đơn vị liên quan;
+d) Theo dõi, đôn đốc, kiểm tra việc thực hiện cung cấp thông tin của Bảo hiểm tiền gửi Việt Nam theo quy định tại Thông tư này;
+d) Bảo quản, lưu trữ và quản lý các báo cáo bằng văn bản do đơn vị mình trực tiếp nhận từ Bảo hiểm tiền gửi Việt Nam theo quy định của pháp luật về lưu trữ.
+2. Trách nhiệm của Cục Công nghệ thông tin
+a) Là đơn vị đầu mối tổ chức tiếp nhận và cập nhật đầy đủ, kịp thời các mẫu biểu báo cáo điện tử vào hệ thống báo cáo do Bảo hiểm tiền gửi Việt Nam truyền qua mạng hoặc gửi qua vật mang tin. Trường hợp báo cáo bị sai về tên, cấu trúc file dữ liệu, các tiêu chí kiểm tra kỹ thuật và thiếu mẫu biểu báo cáo, phải yêu cầu Bảo hiểm tiền gửi Việt Nam báo cáo chỉnh sửa và gửi lại theo đúng quy định; Phản hồi kịp thời về tình trạng dữ liệu cho đơn vị báo cáo. Trường hợp xảy ra sự cố đường truyền dữ liệu của Ngân hàng Nhà nước, phải thực hiện ngay biện pháp để khắc phục sự cố;
+b) Phối hợp với Bảo hiểm tiền gửi Việt Nam trong việc đảm bảo kết nối, duy trì, và bảo đảm tính an toàn, bảo mật mạng truyền tin giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam;
+c) Chủ trì và phối hợp với các đơn vị thuộc Ngân hàng Nhà nước, Bảo hiểm tiền gửi Việt Nam xử lý vướng mắc liên quan đến chương trình tin học báo cáo thống kê trong quá trình thực hiện các quy định tại Luật Bảo hiểm tiền gửi, Thông tư này và Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam;
+d) Hướng dẫn việc cấp phát, quản lý mã khóa, chương trình ký điện tử dùng trong hệ thống báo cáo cho Bảo hiểm tiền gửi Việt Nam;
+đ) Chủ trì xây dựng, phối hợp với Vụ Dự báo, thống kê - Ổn định tiền tệ, tài chính và các đơn vị liên quan hướng dẫn các quy định về tên, cấu trúc file dữ liệu của báo cáo điện tử và hướng dẫn Bảo hiểm tiền gửi Việt Nam lập, gửi mẫu biểu báo cáo điện tử qua hệ thống báo cáo để thực hiện Thông tư này, Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam;
+e) Đầu mối triển khai, hướng dẫn để Bảo hiểm tiền gửi Việt Nam tiếp cận các chỉ tiêu báo cáo thống kê quy định tại Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam;
+g) Thông báo cho Bảo hiểm tiền gửi Việt Nam khi các báo cáo tại Quyết định của Thống đốc Ngân hàng nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam thay đổi cấu trúc file dữ liệu.
+3. Trách nhiệm của các đơn vị khác thuộc Ngân hàng Nhà nước:
+a) Cung cấp thông tin cho Bảo hiểm tiền gửi Việt Nam theo quy định tại Thông tư này và Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam;
+b) Phối hợp với Cục Quản lý, giám sát tổ chức tín dụng xây dựng, trình Thống đốc Ngân hàng Nhà nước ban hành, sửa đổi, bổ sung Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam;
+c) Rà soát, kiểm tra và phản hồi khi nhận được tra soát từ Bảo hiểm tiền gửi Việt Nam đối với các báo cáo thuộc trách nhiệm cung cấp của đơn vị;
+d) Bảo quản, lưu trữ và quản lý các báo cáo bằng văn bản do đơn vị mình trực tiếp nhận từ Bảo hiểm tiền gửi Việt Nam theo quy định của pháp luật về lưu trữ.
+Điều 11. Trách nhiệm của Ngân hàng Nhà nước chi nhánh khu vực
+1. Cung cấp danh sách, thông tin về các tổ chức tín dụng, chi nhánh ngân hàng nước ngoài thuộc thẩm quyền quản lý cho Bảo hiểm tiền gửi Việt Nam, chi nhánh Bảo hiểm tiền gửi Việt Nam tại địa bàn theo quy định tại Luật Bảo hiểm tiền gửi, Thông tư này, Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+2. Phối hợp với Cục Quản lý, giám sát tổ chức tín dụng xây dựng và triển khai thực hiện Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+3. Thực hiện cơ chế phối hợp, cung cấp thông tin với chi nhánh Bảo hiểm tiền gửi Việt Nam.
+4. Tiếp nhận thông tin, báo cáo từ Bảo hiểm tiền gửi Việt Nam, chi nhánh Bảo hiểm tiền gửi Việt Nam và kịp thời xử lý theo chức năng, nhiệm vụ được giao.
+5. Phối hợp với Bảo hiểm tiền gửi Việt Nam, chi nhánh Bảo hiểm tiền gửi Việt Nam xử lý các vướng mắc liên quan đến trách nhiệm của Ngân hàng Nhà nước chi nhánh khu vực trong việc thực hiện Luật Bảo hiểm tiền gửi, Thông tư này, Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+6. Bảo quản, lưu trữ và quản lý các báo cáo bằng văn bản do đơn vị mình trực tiếp nhận từ Bảo hiểm tiền gửi Việt Nam, chi nhánh Bảo hiểm tiền gửi Việt Nam theo quy định của pháp luật về lưu trữ.
+Điều 12. Trách nhiệm của Bảo hiểm tiền gửi Việt Nam
+1. Bảo hiểm tiền gửi Việt Nam có trách nhiệm cung cấp thông tin cho Ngân hàng Nhà nước theo quy định tại Luật Bảo hiểm tiền gửi, Thông tư này, Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+2. Phối hợp với Cục Quản lý, giám sát tổ chức tín dụng xây dựng, trình Thống đốc Ngân hàng Nhà nước ban hành, sửa đổi, bổ sung Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+3. Phối hợp với Cục Công nghệ thông tin trong việc đảm bảo tính an toàn, bảo mật mạng truyền tin giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+4. Trên cơ sở kết quả kiểm tra, đánh giá tình hình hoạt động của tổ chức tham gia bảo hiểm tiền gửi hoặc các nguồn thông tin khác, khi phát hiện tổ chức tham gia bảo hiểm tiền gửi có dấu hiệu vi phạm quy định về an toàn, vi phạm các quy định pháp luật khác về tiền tệ, ngân hàng; nguy cơ mất khả năng chi trả, thất thoát tài sản hoặc có tác động tiêu cực tới các tổ chức tham gia bảo hiểm tiền gửi khác, Bảo hiểm tiền gửi Việt Nam kịp thời cung cấp thông tin liên quan gửi Cục Quản lý, giám sát tổ chức tín dụng.
+5. Chỉ đạo chi nhánh Bảo hiểm tiền gửi xây dựng, thực hiện cơ chế phối hợp, cung cấp thông tin với Ngân hàng Nhà nước chi nhánh khu vực.
+6. Bảo quản, lưu trữ, cung cấp số liệu và báo cáo Ngân hàng Nhà nước theo quy định của pháp luật và chỉ đạo của Thống đốc Ngân hàng Nhà nước.
+Điều 13. Trách nhiệm của chi nhánh Bảo hiểm tiền gửi Việt Nam
+1. Cung cấp thông tin về các tổ chức tham gia bảo hiểm tiền gửi trên địa bàn quản lý cho Ngân hàng Nhà nước chi nhánh khu vực theo quy định tại Thông tư này, Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam.
+2. Xây dựng, thực hiện cơ chế phối hợp, cung cấp thông tin với Ngân hàng Nhà nước chi nhánh khu vực tại địa bàn.
+3. Phối hợp với Ngân hàng Nhà nước chi nhánh khu vực tại địa bàn trong việc xử lý tổ chức tín dụng được can thiệp sớm, được kiểm soát đặc biệt theo quy định của pháp luật.
+4. Bảo quản, lưu trữ, cung cấp số liệu và báo cáo Ngân hàng Nhà nước chi nhánh khu vực theo quy định của pháp luật và chỉ đạo của Thống đốc Ngân hàng Nhà nước.
+Chương III
+TỔ CHỨC THỰC HIỆN
+Điều 14. Hiệu lực thi hành
+1. Thông tư này có hiệu lực thi hành kể từ ngày 01/5/2026.
+2. Các nội dung của Thông tư số 34/2016/TT-NHNN ngày 28 tháng 12 năm 2016 của Thống đốc Ngân hàng Nhà nước quy định việc cung cấp thông tin giữa Ngân hàng Nhà nước Việt Nam và Bảo hiểm tiền gửi Việt Nam hết hiệu lực thi hành kể từ ngày Thông tư này có hiệu lực thi hành, trừ quy định tại khoản 3 Điều này.
+3. Kể từ ngày Thông tư này có hiệu lực thi hành, việc cung cấp thông tin, báo cáo quy định tại khoản 1, khoản 3 Điều 4 Thông tư này, phương thức cung cấp thông tin tại khoản 1 Điều 5 Thông tư này, thời hạn gửi thông tin tại khoản 1 Điều 8 Thông tư này thực hiện theo Phụ lục 01, Phụ lục 02 ban hành kèm theo Thông tư số 34/2016/TT-NHNN ngày 28 tháng 12 năm 2016 của Thống đốc Ngân hàng Nhà nước quy định việc cung cấp thông tin giữa Ngân hàng Nhà nước Việt Nam và Bảo hiểm tiền gửi Việt Nam cho đến khi Quyết định của Thống đốc Ngân hàng Nhà nước về danh mục, chỉ tiêu thông tin, báo cáo giữa Ngân hàng Nhà nước và Bảo hiểm tiền gửi Việt Nam theo quy định tại điểm b khoản 1 Điều 10 Thông tư này có hiệu lực thi hành.
+Điều 15. Tổ chức thực hiện
+Thủ trưởng các đơn vị thuộc Ngân hàng Nhà nước, Bảo hiểm tiền gửi Việt Nam và các tổ chức, đơn vị, cá nhân có liên quan chịu trách nhiệm tổ chức thực hiện Thông tư này./.
+NGÂN HÀNG NHÀ NƯỚC
+VIỆT NAM
+------- | CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+---------------
+Số: 01/2026/TT-NHNN | Hà Nội, ngày 16 tháng 3 năm 2026
+Nơi nhận:
+- Như Điều 15;
+- BLĐ NHNN;
+- Văn phòng Chính phủ;
+- Bộ Tư pháp (để kiểm tra);
+- Công báo;
+- Cổng thông tin điện tử NHNN;
+- Lưu: VP, ATHT1 (03). | KT. THỐNG ĐỐC
+PHÓ THỐNG ĐỐC
+
+Đoàn Thái Sơn
