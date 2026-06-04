@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
@@ -30,6 +31,17 @@ def _split_csv(raw: str) -> List[str]:
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 
+def _default_data_dir(env_name: str, primary: str, fallback: str) -> str:
+    configured = os.getenv(env_name)
+    if configured:
+        return configured
+    if Path(primary).exists():
+        return primary
+    if Path(fallback).exists():
+        return fallback
+    return primary
+
+
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
@@ -41,8 +53,8 @@ class Settings:
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "legal_chunks")
 
-    normalized_dir: str = os.getenv("NORMALIZED_DIR", "data/normalized")
-    raw_dir: str = os.getenv("RAW_DIR", "data/raw")
+    normalized_dir: str = _default_data_dir("NORMALIZED_DIR", "data/normalized", "demo_data/normalized")
+    raw_dir: str = _default_data_dir("RAW_DIR", "data/raw", "demo_data/raw")
     normalized_glob: str = os.getenv("NORMALIZED_GLOB", "*.*")
     graph_snapshot_path: str = os.getenv("GRAPH_SNAPSHOT_PATH", "outputs/runtime/runtime_graph_snapshot.json")
     bm25_stats_path: str = os.getenv("BM25_STATS_PATH", "outputs/bm25/bm25_stats.json")

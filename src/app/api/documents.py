@@ -6,8 +6,6 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
-from pypdf import PdfReader
-from docx import Document
 
 from src.app.settings import settings
 
@@ -58,6 +56,11 @@ def _read_word_preview(path: Path) -> str:
     if path.suffix.lower() == ".doc":
         return "(Định dạng .doc (Word 97-2003) chưa hỗ trợ render trực tiếp. Vui lòng dùng file .docx cùng tên nếu có.)"
 
+    try:
+        from docx import Document
+    except ImportError:
+        return "(Thiếu thư viện python-docx nên chưa thể trích xuất xem nhanh file .docx.)"
+
     doc = Document(str(path))
     chunks: List[str] = []
     total = 0
@@ -83,6 +86,11 @@ def _read_preview(path: Path) -> str:
         return text[:MAX_PREVIEW_CHARS]
 
     if suffix == ".pdf":
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            return "(Thiếu thư viện pypdf nên chưa thể trích xuất xem nhanh file PDF.)"
+
         reader = PdfReader(str(path))
         chunks: List[str] = []
         total = 0
