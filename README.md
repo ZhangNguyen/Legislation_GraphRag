@@ -1,3 +1,12 @@
+---
+title: Legislation GraphRAG
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # Legislation GraphRAG
 
 ## Giới Thiệu Web
