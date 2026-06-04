@@ -23,7 +23,7 @@ def iter_chunk_texts_from_normalized(
     base = Path(input_dir)
 
     if not base.exists():
-        raise RuntimeError(f"Missing folder: {base}")
+        return []
 
     for fp in sorted(base.glob(glob_pattern)):
         if fp.suffix.lower() not in {".pdf", ".txt"}:

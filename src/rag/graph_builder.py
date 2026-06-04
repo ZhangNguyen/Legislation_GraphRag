@@ -252,7 +252,8 @@ def build_runtime_graph(*, input_dir: Optional[str] = None, glob_pattern: Option
     base = Path(input_dir or settings.normalized_dir)
     pattern = glob_pattern or settings.normalized_glob
     if not base.exists():
-        raise RuntimeError(f"Missing normalized dir: {base}")
+        logger.warning("Missing normalized dir: %s. Building an empty runtime graph.", base)
+        return finalize_graph(build_graph(graph_nodes=[], graph_edges=[]))
 
     all_nodes: List[Dict[str, Any]] = []
     all_edges: List[Dict[str, Any]] = []
@@ -296,7 +297,8 @@ def reindex_qdrant_from_normalized(*, input_dir: Optional[str] = None, glob_patt
     base = Path(input_dir or settings.normalized_dir)
     pattern = glob_pattern or settings.normalized_glob
     if not base.exists():
-        raise RuntimeError(f"Missing normalized dir: {base}")
+        logger.warning("Missing normalized dir: %s. Skipping Qdrant reindex.", base)
+        return {"status": "skipped", "indexed_chunks": 0, "reason": "missing_normalized_dir"}
     client = get_qdrant_client()
     ensure_collection(client)
     total = 0
