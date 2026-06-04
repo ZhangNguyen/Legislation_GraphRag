@@ -22,8 +22,10 @@ __pycache__/
 htmlcov/
 
 # Data, generated outputs, and logs
-data/
+data/*
 !data/.gitkeep
+!data/raw/
+!data/raw/**
 outputs/
 logs/
 *.log
