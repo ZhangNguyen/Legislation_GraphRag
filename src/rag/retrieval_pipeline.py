@@ -543,8 +543,8 @@ def _score_candidates(
         phrase_score, matched_phrases = _phrase_signal(question, text)
         md = dict(item.get("metadata") or {})
         doc = docs_by_id.get(str(item.get("doc_id") or ""), {})
-        metadata_prior = _metadata_prior(query_signals, doc)
-        structure_bonus = _structure_bonus(query_profile, md)
+        metadata_prior = _metadata_prior(query_signals, doc) #Xem document có khớp với tín hiệu câu hỏi không
+        structure_bonus = _structure_bonus(query_profile, md) #Điểm thưởng nếu candidate nằm đúng phần cấu trúc mà câu hỏi cần.
         reference_bonus = _reference_bonus(question, md)
         reference_exact = _reference_exact_match_score(md, filters)
 

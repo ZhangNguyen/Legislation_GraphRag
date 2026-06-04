@@ -43,11 +43,52 @@ def _ngrams(tokens: List[str], n: int) -> List[str]:
     return [" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
 
 
-def tokenize(text: str) -> List[str]:
+def regex_tokenize(text: str) -> List[str]:
     raw = _norm_space(text).lower()
-    base = [tok for tok in TOKEN_RE.findall(raw) if tok.strip()]
-    grams = _ngrams(base, 2) + _ngrams(base, 3)
-    return base + grams + _legal_reference_tokens(raw)
+    return [tok for tok in TOKEN_RE.findall(raw) if tok.strip()]
+
+
+def _pyvi_tokenize(raw: str) -> Optional[List[str]]:
+    try:
+        from pyvi import ViTokenizer  # type: ignore
+    except Exception:
+        return None
+    try:
+        segmented = ViTokenizer.tokenize(raw)
+    except Exception:
+        return None
+    tokens = [tok.strip() for tok in segmented.split() if tok.strip()]
+    return tokens or None
+
+
+def _selected_ngrams(tokens: List[str]) -> List[str]:
+    clean = [tok for tok in tokens if tok and tok not in STOPWORDS]
+    if not clean:
+        return []
+    grams: List[str] = []
+    for gram in _ngrams(clean, 2):
+        if any("_" in part for part in gram.split()):
+            continue
+        grams.append(gram)
+    for gram in _ngrams(clean, 3):
+        parts = gram.split()
+        if any("_" in part for part in parts):
+            continue
+        if len([p for p in parts if p not in STOPWORDS]) >= 2:
+            grams.append(gram)
+    return grams
+
+
+def tokenize_vi(text: str) -> List[str]:
+    raw = _norm_space(text).lower()
+    if not raw:
+        return []
+    base = _pyvi_tokenize(raw) or regex_tokenize(raw)
+    return base + _legal_reference_tokens(raw) + _selected_ngrams(base)
+
+
+def tokenize(text: str) -> List[str]:
+    return tokenize_vi(text)
 
 
 def extract_topic_phrases(question: str) -> List[str]:

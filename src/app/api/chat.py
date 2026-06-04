@@ -7,9 +7,12 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from src.app.settings import settings
 from src.app.runtime import ensure_runtime_graph
+from src.rag.context_grader import grade_context
 from src.rag.qa_engine import answer_with_rag
 from src.rag.retrieval_pipeline import retrieve_with_graph
+from src.rag.retrieval_pipeline_simple import retrieve_with_graph_simple
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -34,16 +37,31 @@ def chat(req: ChatRequestModel) -> Dict[str, Any]:
     graph = ensure_runtime_graph()
     t1 = time.perf_counter()
 
-    retrieval_result = retrieve_with_graph(
-        question=req.question,
-        graph=graph,
-        filters=req.filters,
-        qdrant_top_k=req.qdrant_top_k,
-        graph_hops=req.graph_hops,
-        max_graph_nodes=req.max_graph_nodes,
-        final_top_k=req.final_top_k,
-        cross_top_k=req.cross_top_k,
-    )
+    if str(getattr(settings, "retrieval_pipeline", "simple_rrf") or "").lower() in {"simple", "simple_rrf"}:
+        retrieval_result = retrieve_with_graph_simple(
+            question=req.question,
+            graph=graph,
+            filters=req.filters,
+            final_top_k=req.final_top_k,
+        )
+        context_grade = grade_context(
+            req.question,
+            dict(retrieval_result.get("query_profile") or {}),
+            list(retrieval_result.get("passages") or []),
+        )
+        retrieval_result["context_grade"] = context_grade
+        retrieval_result["insufficient_context"] = context_grade.get("status") == "insufficient"
+    else:
+        retrieval_result = retrieve_with_graph(
+            question=req.question,
+            graph=graph,
+            filters=req.filters,
+            qdrant_top_k=req.qdrant_top_k,
+            graph_hops=req.graph_hops,
+            max_graph_nodes=req.max_graph_nodes,
+            final_top_k=req.final_top_k,
+            cross_top_k=req.cross_top_k,
+        )
     t2 = time.perf_counter()
 
     response = answer_with_rag(
@@ -75,6 +93,8 @@ def chat(req: ChatRequestModel) -> Dict[str, Any]:
             "candidate_pool": retrieval_result.get("candidate_pool", []),
             "passages_count": len(retrieval_result.get("passages", []) or []),
             "insufficient_context": retrieval_result.get("insufficient_context", False),
+            "context_grade": retrieval_result.get("context_grade", {}),
+            "filter_info": retrieval_result.get("filter_info", {}),
         }
 
     return result

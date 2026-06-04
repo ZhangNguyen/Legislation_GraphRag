@@ -12,6 +12,7 @@ Requires-Dist: openai>=0.27.0
 Requires-Dist: qdrant-client>=1.7.0
 Requires-Dist: sentence-transformers>=2.2.0
 Requires-Dist: pypdf>=3.0.0
+Requires-Dist: python-docx>=1.1.0
 Requires-Dist: ocrmypdf>=13.0.0
 Requires-Dist: pytesseract>=0.3.10
 Requires-Dist: pdf2image>=1.16.0
@@ -21,4 +22,8 @@ Requires-Dist: pydantic>=1.8.0
 Requires-Dist: requests>=2.28.0
 Requires-Dist: numpy>=1.21.0
 Requires-Dist: tqdm>=4.62.0
+Provides-Extra: vi
+Requires-Dist: pyvi>=0.1.1; extra == "vi"
+Provides-Extra: agent
+Requires-Dist: langgraph>=0.0.40; extra == "agent"
 Dynamic: license-file

@@ -46,6 +46,7 @@ class Settings:
     normalized_glob: str = os.getenv("NORMALIZED_GLOB", "*.*")
     graph_snapshot_path: str = os.getenv("GRAPH_SNAPSHOT_PATH", "outputs/runtime/runtime_graph_snapshot.json")
     bm25_stats_path: str = os.getenv("BM25_STATS_PATH", "outputs/bm25/bm25_stats.json")
+    retrieval_pipeline: str = os.getenv("RETRIEVAL_PIPELINE", "simple_rrf")
 
     doc_top_k: int = _get_int("DOC_TOP_K", 3)
     content_top_k_per_doc: int = _get_int("CONTENT_TOP_K_PER_DOC", 3)
@@ -61,9 +62,11 @@ class Settings:
     answer_max_context_passages: int = _get_int("ANSWER_MAX_CONTEXT_PASSAGES", 5)
     answer_max_source_items: int = _get_int("ANSWER_MAX_SOURCE_ITEMS", 5)
 
-    rerank_model: str = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
+    enable_reranker: bool = os.getenv("ENABLE_RERANKER", "0").strip().lower() in {"1", "true", "yes", "on"}
+    rerank_model: str = os.getenv("RERANK_MODEL", "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
     rerank_device: str = os.getenv("RERANK_DEVICE", "cpu")
-    rerank_top_n: int = _get_int("RERANK_TOP_N", 12)
+    rerank_top_n: int = _get_int("RERANK_TOP_N", 5)
+    rerank_input_top_k: int = _get_int("RERANK_INPUT_TOP_K", 30)
 
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
     app_port: int = _get_int("APP_PORT", 8000)
