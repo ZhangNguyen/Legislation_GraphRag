@@ -4,22 +4,32 @@ import logging
 import re
 from typing import Any, Dict, List
 
-from sentence_transformers import CrossEncoder
-
 from src.app.settings import settings
 
 logger = logging.getLogger(__name__)
-_ce: CrossEncoder | None = None
+_ce: Any = None
+_load_failed = False
 
 
-def get_cross_encoder() -> CrossEncoder:
-    global _ce
+def get_cross_encoder() -> Any:
+    global _ce, _load_failed
+    if not bool(getattr(settings, "enable_reranker", False)):
+        return None
+    if _load_failed:
+        return None
     if _ce is None:
-        _ce = CrossEncoder(
-            settings.rerank_model,
-            device=settings.rerank_device,
-            max_length=512,
-        )
+        try:
+            from sentence_transformers import CrossEncoder
+
+            _ce = CrossEncoder(
+                settings.rerank_model,
+                device=settings.rerank_device,
+                max_length=512,
+            )
+        except Exception as exc:
+            _load_failed = True
+            logger.warning("Reranker disabled after model load failure: %s", exc)
+            return None
     return _ce
 
 
@@ -58,16 +68,24 @@ def cross_rerank(question: str, passages: List[Dict[str, Any]], top_n: int) -> L
 
     question = _norm_space(question)
     ce = get_cross_encoder()
+    if ce is None:
+        return passages[: max(1, int(top_n or len(passages)))]
 
     pairs = []
-    for p in passages:
+    input_top_k = max(1, int(getattr(settings, "rerank_input_top_k", 30) or 30))
+    working = passages[:input_top_k]
+    for p in working:
         rerank_text = build_anchor_rerank_text(p)
         pairs.append((question, rerank_text))
 
-    scores = ce.predict(pairs)
+    try:
+        scores = ce.predict(pairs)
+    except Exception as exc:
+        logger.warning("Reranker disabled for this request after predict failure: %s", exc)
+        return passages[: max(1, int(top_n or len(passages)))]
 
     rescored: List[Dict[str, Any]] = []
-    for p, score in zip(passages, scores):
+    for p, score in zip(working, scores):
         item = dict(p)
         item["cross_score"] = float(score)
         rescored.append(item)

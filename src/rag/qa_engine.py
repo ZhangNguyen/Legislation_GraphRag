@@ -22,6 +22,26 @@ Nguyên tắc bắt buộc:
 - Khi có thể, nêu căn cứ theo văn bản, điều, khoản, điểm hoặc vị trí tương ứng.
 """.strip()
 
+LEGAL_REASONING_SYSTEM_PROMPT = """
+Bạn là trợ lý trả lời pháp luật Việt Nam.
+
+Nguyên tắc bắt buộc:
+- Chỉ sử dụng context đã truy xuất.
+- Không bịa số tiền phạt, điều/khoản/điểm, mức trừ điểm, thời hạn hoặc thủ tục nếu context không có.
+- Nếu context không đủ, nói rõ phần nào chưa đủ căn cứ.
+- Được phép suy luận pháp lý thận trọng khi câu hỏi yêu cầu đánh giá tình huống.
+- Với câu hỏi ai có lỗi, bên nào sai hoặc ai chịu trách nhiệm trong va chạm: liệt kê hành vi từng bên từ câu hỏi, đối chiếu từng hành vi với quy định được truy xuất, kết luận lỗi có thể là lỗi đơn hoặc lỗi hỗn hợp, và lưu ý tỷ lệ lỗi/trách nhiệm cuối cùng do cơ quan có thẩm quyền xác định.
+- Không kết luận chắc chắn nếu context chỉ hỗ trợ một phần.
+- Nếu có nhiều khả năng, trình bày theo dạng nếu... thì...
+- Khi trả lời, nêu căn cứ theo văn bản/Điều/Khoản/Điểm nếu source có metadata.
+- Nếu answer cần citation nhưng sources không có citation rõ, nói “chưa đủ căn cứ trong dữ liệu truy xuất”.
+- Không dùng kiến thức ngoài context để thêm mức phạt hoặc điều luật.
+- Không tự tạo văn bản pháp luật không có trong sources.
+- Không tự suy ra số điều/khoản/điểm.
+- Không trả lời lan man ngoài câu hỏi.
+- Ưu tiên trả lời ngắn gọn, trực tiếp, có căn cứ.
+""".strip()
+
 DOC_SCOPE_SUMMARY_TRIGGERS = [
     "quy định về vấn đề gì",
     "quy định về gì",
@@ -245,8 +265,9 @@ Nếu có thể, nêu căn cứ theo văn bản và vị trí tương ứng.
 def answer_with_rag(question: str, retrieval_result: Dict[str, Any]) -> ChatResponse:
     passages = list(retrieval_result.get("passages") or [])
     insufficient = bool(retrieval_result.get("insufficient_context"))
+    context_grade = dict(retrieval_result.get("context_grade") or {})
 
-    if insufficient or not passages:
+    if insufficient or context_grade.get("status") == "insufficient" or not passages:
         return ChatResponse(
             answer="Ngữ cảnh truy xuất hiện tại chưa đủ căn cứ để trả lời chính xác câu hỏi này.",
             sources=[],
@@ -258,7 +279,11 @@ def answer_with_rag(question: str, retrieval_result: Dict[str, Any]) -> ChatResp
     llm = get_llm()
     resp = llm.invoke(
         [
-            SystemMessage(content=BASE_SYSTEM_PROMPT),
+            SystemMessage(
+                content=LEGAL_REASONING_SYSTEM_PROMPT
+                if context_grade.get("status") == "needs_reasoning"
+                else BASE_SYSTEM_PROMPT
+            ),
             HumanMessage(content=user_prompt),
         ]
     )

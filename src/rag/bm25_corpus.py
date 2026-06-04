@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.rag.chunking_legal import legal_chunk
-from src.rag.hybrid import tokenize
+from src.rag.hybrid import tokenize_vi
 from src.utils.loader import load_document
 
 
@@ -52,7 +52,7 @@ def build_bm25_stats_from_texts(texts: List[str]) -> Dict[str, Any]:
     df: Dict[str, int] = {}
 
     for text in texts:
-        tokens = tokenize(text)
+        tokens = tokenize_vi(text)
         if not tokens:
             continue
         tokenized_docs.append(tokens)

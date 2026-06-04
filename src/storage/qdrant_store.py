@@ -32,6 +32,41 @@ def ensure_collection(client: QdrantClient, vector_size: int = DEFAULT_VECTOR_SI
     )
 
 
+def ensure_payload_indexes(client: QdrantClient) -> None:
+    keyword_fields = [
+        "doc_number",
+        "law_type",
+        "doc_type",
+        "article",
+        "clause",
+        "point",
+        "doc_id",
+        "chunk_id",
+        "node_id",
+    ]
+    integer_fields = ["year"]
+
+    for field in keyword_fields:
+        try:
+            client.create_payload_index(
+                collection_name=settings.qdrant_collection,
+                field_name=field,
+                field_schema=qm.PayloadSchemaType.KEYWORD,
+            )
+        except Exception:
+            pass
+
+    for field in integer_fields:
+        try:
+            client.create_payload_index(
+                collection_name=settings.qdrant_collection,
+                field_name=field,
+                field_schema=qm.PayloadSchemaType.INTEGER,
+            )
+        except Exception:
+            pass
+
+
 def build_filter(filters: Dict[str, Any]) -> Optional[qm.Filter]:
     if not filters:
         return None

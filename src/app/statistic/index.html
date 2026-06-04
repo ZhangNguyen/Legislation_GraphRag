@@ -34,7 +34,6 @@
       padding: 14px;
       margin-top: 12px;
     }
-    .role-btns { display: flex; gap: 12px; flex-wrap: wrap; }
     button {
       border: 1px solid var(--border);
       background: #1f2a44;
@@ -105,18 +104,9 @@
 <body>
   <div class="container">
     <h1>Legislation GraphRAG</h1>
-    <p class="subtitle">Chọn vai trò để vào giao diện phù hợp.</p>
+    <p class="subtitle">Tra cứu văn bản pháp luật và hỏi đáp theo ngữ cảnh tài liệu.</p>
 
-    <div id="landing" class="card">
-      <h2>Bạn là ai?</h2>
-      <div class="role-btns">
-        <button class="primary" onclick="openRole('user')">Vào trang User</button>
-        <button onclick="openRole('admin')">Vào trang Admin</button>
-      </div>
-      <p class="subtitle" style="margin-top:12px;">User chỉ chat. Admin có đầy đủ công cụ vận hành.</p>
-    </div>
-
-    <div id="userPanel" class="hidden">
+    <div id="userPanel">
       <div class="user-layout">
         <div class="card side-card">
           <div class="row" style="justify-content:space-between; align-items:center;">
@@ -142,11 +132,7 @@
         <div class="chat-column">
           <div class="card">
             <div class="row" style="justify-content:space-between; align-items:center;">
-              <h2>User Chat</h2>
-              <div>
-                <span class="tag">User mode</span>
-                <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
-              </div>
+              <h2>Tra cứu pháp luật</h2>
             </div>
             <p class="subtitle">Hãy hỏi các câu hỏi pháp luật trong văn bản hiển thị. Khuyến cáo: Mỗi câu hỏi nên đi kèm tóm gọn tiêu đề của văn bản được hỏi.</p>
             <label for="userQuestion">Câu hỏi</label>
@@ -165,44 +151,6 @@
       </div>
     </div>
 
-    <div id="adminPanel" class="hidden">
-      <div class="card">
-        <div class="row" style="justify-content:space-between; align-items:center;">
-          <h2>Admin Console</h2>
-          <div>
-            <span class="tag">Admin mode</span>
-            <button class="ghost" onclick="backToLanding()">← Quay lại chọn vai trò</button>
-          </div>
-        </div>
-        <p class="subtitle">Admin dùng chat debug và benchmark để kiểm thử chất lượng phản hồi.</p>
-      </div>
-
-      <div class="card">
-        <h3>Admin Chat (debug)</h3>
-        <textarea id="adminQuestion" placeholder="Nhập câu hỏi để test retrieval + debug..."></textarea>
-        <div class="row">
-          <button class="primary" onclick="sendAdminChat()">Gửi /api/chat (debug)</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Benchmark Evaluate</h3>
-        <label>Câu hỏi</label>
-        <input id="benchQuestion" placeholder="Câu hỏi benchmark" />
-        <label>Answer</label>
-        <textarea id="benchAnswer" placeholder="Câu trả lời từ hệ thống"></textarea>
-        <label>Reference answer (optional)</label>
-        <textarea id="benchRef" placeholder="Đáp án chuẩn (nếu có)"></textarea>
-        <label>Contexts (mỗi dòng là 1 context)</label>
-        <textarea id="benchContexts" placeholder="Context 1\nContext 2"></textarea>
-        <button onclick="runBenchmark()">/api/benchmark/evaluate</button>
-      </div>
-
-      <div class="card">
-        <h3>Admin Output</h3>
-        <pre id="adminOutput"></pre>
-      </div>
-    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -211,19 +159,6 @@
     let viewerZoom = 1;
     let activeViewerType = 'none';
 
-    function openRole(role) {
-      document.getElementById('landing').classList.add('hidden');
-      document.getElementById('userPanel').classList.toggle('hidden', role !== 'user');
-      document.getElementById('adminPanel').classList.toggle('hidden', role !== 'admin');
-      if (role === 'user') loadRandomDocuments();
-    }
-
-    function backToLanding() {
-      document.getElementById('landing').classList.remove('hidden');
-      document.getElementById('userPanel').classList.add('hidden');
-      document.getElementById('adminPanel').classList.add('hidden');
-    }
-
     async function postJson(url, body) {
       const res = await fetch(url, {
         method: 'POST',
@@ -231,10 +166,6 @@
         body: JSON.stringify(body || {})
       });
       return await res.json();
-    }
-
-    function printAdmin(data) {
-      document.getElementById('adminOutput').textContent = JSON.stringify(data, null, 2);
     }
 
     function setViewerMode(mode) {
@@ -314,46 +245,6 @@
         statusEl.textContent = `Lỗi tải danh sách file: ${err}`;
       }
 
-      viewerEl.innerHTML = `
-        <div class="docx-zoom-container">
-          <div class="docx-zoom-content" id="docxZoomRoot">
-            <div class="doc-html-viewer" id="docxRenderRoot"><h4>${escapeHtml(filename)}</h4><div>Đang render file DOCX...</div></div>
-          </div>
-        </div>
-      `;
-
-      const renderRoot = document.getElementById('docxRenderRoot');
-      try {
-        const fileRes = await fetch(fileUrl);
-        if (!fileRes.ok) {
-          throw new Error(`HTTP ${fileRes.status}`);
-        }
-
-        const fileBuffer = await fileRes.arrayBuffer();
-        renderRoot.innerHTML = '';
-        await window.docx.renderAsync(fileBuffer, renderRoot, null, {
-          className: 'docx',
-          inWrapper: false,
-          ignoreWidth: false,
-          ignoreHeight: false,
-          renderHeaders: true,
-          renderFooters: true,
-          renderFootnotes: true,
-          useBase64URL: true,
-        });
-        applyViewerZoom();
-      } catch (error) {
-        setViewerMode('default');
-        activeViewerType = 'fallback';
-        const htmlBody = escapeHtml(data.preview || '(Không có nội dung)').replaceAll('\n', '<br />');
-        viewerEl.innerHTML = `
-          <div class="doc-html-viewer">
-            <h4>${escapeHtml(filename)}</h4>
-            <p>Render DOCX lỗi (${escapeHtml(error)}), hiển thị fallback:</p>
-            <div>${htmlBody}</div>
-          </div>
-        `;
-      }
     }
 
     async function renderDocumentViewer(item, data) {
@@ -560,39 +451,7 @@
       thread.scrollTop = thread.scrollHeight;
     }
 
-    async function sendAdminChat() {
-      const question = document.getElementById('adminQuestion').value.trim();
-      if (!question) return;
-      const data = await postJson('/api/chat', {
-        question,
-        include_debug: true,
-      });
-      printAdmin(data);
-    }
-
-    async function runBenchmark() {
-      const question = document.getElementById('benchQuestion').value.trim();
-      const answer = document.getElementById('benchAnswer').value.trim();
-      const reference_answer = document.getElementById('benchRef').value.trim();
-      const contexts = document.getElementById('benchContexts').value
-        .split('\n')
-        .map(x => x.trim())
-        .filter(Boolean);
-
-      if (!question || !answer) {
-        alert('Benchmark cần ít nhất question + answer');
-        return;
-      }
-
-      const data = await postJson('/api/benchmark/evaluate', {
-        question,
-        answer,
-        contexts,
-        reference_answer: reference_answer || null,
-        n_generated_questions: 3,
-      });
-      printAdmin(data);
-    }
+    document.addEventListener('DOMContentLoaded', loadRandomDocuments);
   </script>
 </body>
 </html>
