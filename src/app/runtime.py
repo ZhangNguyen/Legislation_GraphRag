@@ -143,9 +143,9 @@ def preload_runtime_on_startup(
         return get_runtime_status()
 
 
-def rebuild_everything() -> Dict[str, Any]:
+def rebuild_everything(*, input_dir: Optional[str] = None, glob_pattern: Optional[str] = None) -> Dict[str, Any]:
     t0 = time.perf_counter()
-    result = _rebuild_everything()
+    result = _rebuild_everything(input_dir=input_dir, glob_pattern=glob_pattern)
     elapsed = time.perf_counter() - t0
 
     graph = result.get("graph")
@@ -172,9 +172,9 @@ def rebuild_everything() -> Dict[str, Any]:
     }
 
 
-def reindex_qdrant_from_normalized() -> Dict[str, Any]:
+def reindex_qdrant_from_normalized(*, input_dir: Optional[str] = None, glob_pattern: Optional[str] = None) -> Dict[str, Any]:
     t0 = time.perf_counter()
-    result = _reindex_qdrant_from_normalized()
+    result = _reindex_qdrant_from_normalized(input_dir=input_dir, glob_pattern=glob_pattern)
     elapsed = time.perf_counter() - t0
     _RUNTIME["last_reindex_seconds"] = elapsed
 

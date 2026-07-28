@@ -43,15 +43,32 @@ def read_docx(path: Path) -> str:
     # đọc thêm text trong bảng nếu có
     for table in doc.tables:
         for row in table.rows:
-            row_text = []
-            for cell in row.cells:
-                cell_txt = cell.text.strip()
-                if cell_txt:
-                    row_text.append(cell_txt)
+            row_text = _safe_row_text(row)
             if row_text:
                 parts.append(" | ".join(row_text))
 
     return "\n".join(parts)
+
+
+def _safe_row_text(row) -> List[str]:
+    try:
+        texts = [cell.text.strip() for cell in row.cells if cell.text and cell.text.strip()]
+    except Exception:
+        texts = []
+        for tc in getattr(getattr(row, "_tr", None), "tc_lst", []) or []:
+            cell_text = "\n".join(t for t in tc.itertext() if t and t.strip()).strip()
+            if cell_text:
+                texts.append(cell_text)
+
+    deduped: List[str] = []
+    for text in texts:
+        text = normalize_text(text)
+        if not text:
+            continue
+        if deduped and deduped[-1] == text:
+            continue
+        deduped.append(text)
+    return deduped
 
 
 def _find_soffice() -> str | None:

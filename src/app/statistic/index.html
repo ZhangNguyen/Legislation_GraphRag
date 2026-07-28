@@ -76,6 +76,50 @@
     .msg-user { align-self: flex-end; background: #29407a; border: 1px solid #3f5fb0; }
     .msg-bot { align-self: flex-start; background: #15213b; border: 1px solid var(--border); }
     .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .debug-flow {
+      margin-top: 12px;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      font-size: 12px;
+      color: var(--text);
+    }
+    .debug-flow summary {
+      cursor: pointer;
+      color: #dbe6ff;
+      font-weight: 700;
+      padding: 6px 0;
+    }
+    .debug-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin: 8px 0; }
+    .debug-box {
+      border: 1px solid var(--border);
+      background: #0f1629;
+      border-radius: 8px;
+      padding: 8px;
+      overflow: hidden;
+    }
+    .debug-title { color: #b8c7ff; font-weight: 700; margin-bottom: 5px; }
+    .debug-muted { color: var(--muted); }
+    .debug-chip { display: inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 2px 7px; margin: 2px 4px 2px 0; color: #cbd6f6; }
+    .debug-timeline { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .debug-step { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: start; }
+    .debug-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid #4f73d9;
+      background: #20376f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 3px;
+    }
+    .debug-step-card { border: 1px solid var(--border); background: #101a31; border-radius: 8px; padding: 8px; }
+    .debug-list { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .debug-item { border: 1px solid #233052; background: #0c1326; border-radius: 6px; padding: 6px; }
+    .debug-item strong { color: #eaf0ff; }
+    .debug-kv { white-space: pre-wrap; overflow-wrap: anywhere; color: #dce5ff; }
 
     .user-layout { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(520px, 1.4fr) minmax(320px, 1fr); gap: 12px; margin-top: 12px; align-items: start; }
     .doc-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
@@ -293,7 +337,7 @@
 
 
     function escapeHtml(value) {
-      return String(value || '')
+      return String(value === null || value === undefined ? '' : value)
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;')
@@ -419,6 +463,111 @@
       }
     }
 
+    function debugValue(value, fallback = '') {
+      if (value === null || value === undefined || value === '') return fallback;
+      if (typeof value === 'number') return Number.isFinite(value) ? value.toFixed(value >= 10 ? 2 : 4) : String(value);
+      if (typeof value === 'object') return JSON.stringify(value, null, 2);
+      return String(value);
+    }
+
+    function renderDebugChips(obj, keys) {
+      return keys
+        .map((key) => {
+          const value = obj && obj[key];
+          if (value === null || value === undefined || value === '' || (Array.isArray(value) && !value.length)) return '';
+          return `<span class="debug-chip">${escapeHtml(key)}: ${escapeHtml(debugValue(value))}</span>`;
+        })
+        .filter(Boolean)
+        .join('');
+    }
+
+    function renderCandidateList(title, items, emptyText) {
+      const list = Array.isArray(items) ? items : [];
+      if (!list.length) {
+        return `<div class="debug-box"><div class="debug-title">${escapeHtml(title)}</div><div class="debug-muted">${escapeHtml(emptyText || 'No items')}</div></div>`;
+      }
+      const rendered = list.slice(0, 8).map((item, idx) => `
+        <li class="debug-item">
+          <strong>#${idx + 1} ${escapeHtml(item.node_type || item.artifact_type || 'node')}</strong>
+          <div class="debug-muted">${escapeHtml(item.doc_number || '')} ${escapeHtml(item.path_title || '')}</div>
+          <div>${renderDebugChips(item, ['reason', 'children_count', 'score', 'text_length'])}</div>
+          <div class="debug-kv">${escapeHtml(item.snippet || '')}</div>
+        </li>
+      `).join('');
+      return `
+        <div class="debug-box">
+          <div class="debug-title">${escapeHtml(title)} (${list.length})</div>
+          <ul class="debug-list">${rendered}</ul>
+        </div>
+      `;
+    }
+
+    function renderDebugFlow(debug, timings) {
+      const flow = (debug && debug.debug_flow) || {};
+      const profile = flow.query_profile || (debug && debug.query_profile) || {};
+      const filters = profile.filters || {};
+      const steps = Array.isArray(flow.steps) ? flow.steps : ((debug && debug.navigation_trace) || []);
+      const evidence = Array.isArray(flow.evidence) ? flow.evidence : [];
+      const retrievalTimings = flow.timings_ms || (debug && debug.retrieval_timings_ms) || {};
+      const totalTimings = timings || {};
+      const timingChips = Object.entries({ ...totalTimings, ...retrievalTimings })
+        .map(([key, value]) => `<span class="debug-chip">${escapeHtml(key)}: ${escapeHtml(value)}ms</span>`)
+        .join('');
+      const stepHtml = steps.length
+        ? steps.map((step, idx) => `
+          <div class="debug-step">
+            <div class="debug-dot">${idx + 1}</div>
+            <div class="debug-step-card">
+              <div class="debug-title">Hop ${escapeHtml(step.hop ?? idx)} | Decision: ${escapeHtml(step.decision || step.type || 'n/a')}</div>
+              <div>${renderDebugChips(step, ['answerability', 'confidence', 'reason', 'next_query'])}</div>
+              ${(step.selected_node_ids || []).length ? `<div class="debug-muted">Selected: ${escapeHtml((step.selected_node_ids || []).join(', '))}</div>` : ''}
+              ${(step.missing_evidence || []).length ? `<div class="debug-muted">Missing: ${escapeHtml((step.missing_evidence || []).join('; '))}</div>` : ''}
+              <div class="debug-grid">
+                ${renderCandidateList('Candidates judged', step.candidates || [], 'No candidates recorded')}
+                ${renderCandidateList('Expanded candidates', step.expanded_candidates || [], 'No expansion in this hop')}
+                ${renderCandidateList('After rerank', step.after_rerank || [], 'No rerank in this hop')}
+              </div>
+            </div>
+          </div>
+        `).join('')
+        : '<div class="debug-muted">No navigation trace returned.</div>';
+
+      return `
+        <details class="debug-flow" open>
+          <summary>Debug flow</summary>
+          <div class="debug-grid">
+            <div class="debug-box">
+              <div class="debug-title">Route</div>
+              <div>${renderDebugChips({ pipeline: flow.pipeline || (debug && debug.mode), route_case: flow.route_case || (debug && debug.mode), insufficient_context: debug && debug.insufficient_context }, ['pipeline', 'route_case', 'insufficient_context'])}</div>
+            </div>
+            <div class="debug-box">
+              <div class="debug-title">Query plan</div>
+              <div>${renderDebugChips(profile, ['intent', 'route', 'article', 'clause', 'point', 'doc_number', 'law_type', 'year'])}</div>
+              <div class="debug-muted">Filters</div>
+              <div class="debug-kv">${escapeHtml(JSON.stringify(filters, null, 2))}</div>
+              ${profile.document_match ? `<div class="debug-muted">Document match</div><div class="debug-kv">${escapeHtml(JSON.stringify(profile.document_match, null, 2))}</div>` : ''}
+              ${(profile.removed_filters || []).length ? `<div class="debug-muted">Removed filters</div><div class="debug-kv">${escapeHtml(JSON.stringify(profile.removed_filters, null, 2))}</div>` : ''}
+            </div>
+            <div class="debug-box">
+              <div class="debug-title">Timing</div>
+              <div>${timingChips || '<span class="debug-muted">No timing</span>'}</div>
+            </div>
+          </div>
+          <div class="debug-timeline">${stepHtml}</div>
+          <div class="debug-grid">
+            ${renderCandidateList('Final evidence fetched', evidence, 'No evidence fetched')}
+            ${renderCandidateList('Top summary candidates', (debug && debug.summary_candidates) || [], 'No summary candidates')}
+          </div>
+          ${debug && debug.post_answer_verification ? `
+            <div class="debug-box">
+              <div class="debug-title">Post-answer verifier</div>
+              <div class="debug-kv">${escapeHtml(JSON.stringify(debug.post_answer_verification, null, 2))}</div>
+            </div>
+          ` : ''}
+        </details>
+      `;
+    }
+
     async function sendUserChat() {
       const question = document.getElementById('userQuestion').value.trim();
       if (!question) return;
@@ -441,13 +590,19 @@
       });
 
       const answer = data.answer || '(không có nội dung trả lời)';
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      meta.textContent =
+      // const meta = document.createElement('div');
+      // meta.className = 'meta';
+      /* meta.textContent =
         `Nguồn: ${(data.sources || []).length} | Timing: ${JSON.stringify(data.timings_ms || {})}`;
 
+      */
       botNode.textContent = answer;
-      botNode.appendChild(meta);
+      // botNode.appendChild(meta);
+      // if (data.debug) {
+      //   const debugWrap = document.createElement('div');
+      //   debugWrap.innerHTML = renderDebugFlow(data.debug, data.timings_ms || {});
+      //   botNode.appendChild(debugWrap);
+      // }
       thread.scrollTop = thread.scrollHeight;
     }
 

@@ -26,7 +26,7 @@ def iter_chunk_texts_from_normalized(
         return []
 
     for fp in sorted(base.glob(glob_pattern)):
-        if fp.suffix.lower() not in {".pdf", ".txt"}:
+        if fp.suffix.lower() not in {".pdf", ".txt", ".docx", ".doc"}:
             continue
 
         raw_text = load_document(fp)

@@ -15,6 +15,21 @@ from src.rag.openai_clients import get_embedings
 from src.rag.rerank_cross import cross_rerank
 
 logger = logging.getLogger(__name__)
+REFERENCE_NODE_TYPES_EXTENDED = {
+    "article",
+    "clause",
+    "point",
+    "section",
+    "appendix",
+    "roman_section",
+    "alpha_section",
+    "item",
+    "decimal_item",
+    "list_item",
+    "bullet",
+    "table",
+    "table_row",
+}
 
 _TEXT_EMBED_CACHE: Dict[str, List[float]] = {}
 _QUESTION_EMBED_CACHE: Dict[str, List[float]] = {}
@@ -421,7 +436,7 @@ def _build_doc_catalog(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
             bucket["evidence_node_ids"].append(node_id)
         elif art == "evidence":
             bucket["evidence_node_ids"].append(node_id)
-        if ntype in {"article", "clause", "point", "section", "item", "bullet"}:
+        if ntype in REFERENCE_NODE_TYPES_EXTENDED:
             bucket["reference_node_ids"].append(node_id)
 
     docs: List[Dict[str, Any]] = []
@@ -497,7 +512,7 @@ def _iter_reference_candidates(graph: Dict[str, Any], *, allowed_doc_ids: Option
         if allowed_doc_ids is not None and doc_id not in allowed_doc_ids:
             continue
         ntype = _node_type(node)
-        if ntype not in {"article", "clause", "point", "section", "item", "bullet"}:
+        if ntype not in REFERENCE_NODE_TYPES_EXTENDED:
             continue
         text = _node_text(node)
         out.append(

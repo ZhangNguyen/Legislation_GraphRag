@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from src.app.settings import settings
@@ -16,8 +18,25 @@ from src.storage.qdrant_store import get_qdrant_client, ensure_payload_indexes, 
 logger = logging.getLogger(__name__)
 
 _QUESTION_EMBED_CACHE: Dict[str, List[float]] = {}
+_DENSE_SEARCH_CACHE: Dict[Tuple[str, int, str], List[Dict[str, Any]]] = {}
 _TOKEN_CACHE: Dict[str, List[str]] = {}
 _BM25_RUNTIME: Optional[Dict[str, Any]] = None
+REFERENCE_NODE_TYPES_EXTENDED = {
+    "article",
+    "clause",
+    "point",
+    "section",
+    "appendix",
+    "attachment",
+    "roman_section",
+    "alpha_section",
+    "item",
+    "decimal_item",
+    "list_item",
+    "bullet",
+    "table",
+    "table_row",
+}
 
 _CROSS_REF_RE = re.compile(
     r"(?:(điểm)\s+([a-zđ])\s+)?(?:(khoản)\s+(\d+)\s+)?(điều)\s+(\d+)",
@@ -103,6 +122,26 @@ def _question_embedding(question: str) -> List[float]:
     return _QUESTION_EMBED_CACHE[key]
 
 
+def _question_embeddings(questions: List[str]) -> Dict[str, List[float]]:
+    from src.rag.openai_clients import get_embedings
+
+    normalized = [_norm_space(question) for question in questions if _norm_space(question)]
+    out: Dict[str, List[float]] = {}
+    misses: List[Tuple[str, str]] = []
+    for question in normalized:
+        key = _text_cache_key(question)
+        if key in _QUESTION_EMBED_CACHE:
+            out[question] = _QUESTION_EMBED_CACHE[key]
+        else:
+            misses.append((key, question))
+    if misses:
+        vectors = get_embedings().embed_documents([question for _, question in misses])
+        for (key, question), vector in zip(misses, vectors):
+            _QUESTION_EMBED_CACHE[key] = list(vector)
+            out[question] = _QUESTION_EMBED_CACHE[key]
+    return out
+
+
 def _get_bm25_runtime() -> Dict[str, Any]:
     global _BM25_RUNTIME
     if _BM25_RUNTIME is not None:
@@ -128,14 +167,7 @@ def _iter_graph_candidates(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
             continue
         artifact = str(md.get("artifact_type") or "evidence").strip().lower()
         node_type = str(md.get("node_type") or node.get("node_type") or "").strip().lower()
-        if artifact not in {"evidence", "article_bundle", "section_bundle", "doc_sketch"} and node_type not in {
-            "article",
-            "clause",
-            "point",
-            "section",
-            "item",
-            "bullet",
-        }:
+        if artifact not in {"evidence", "article_bundle", "section_bundle", "doc_sketch"} and node_type not in REFERENCE_NODE_TYPES_EXTENDED:
             continue
         out.append(
             {
@@ -305,24 +337,95 @@ def dense_search(
     filter_info: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     del candidates
+    return dense_search_many(
+        [question],
+        top_k=top_k,
+        query_profile=query_profile,
+        filter_info=filter_info,
+    ).get(_norm_space(question), [])
+
+
+def _dense_cache_key(question: str, top_k: int, filters: Dict[str, Any]) -> Tuple[str, int, str]:
+    return (
+        hashlib.sha1(_norm_space(question).encode("utf-8")).hexdigest(),
+        int(top_k or 0),
+        json.dumps(filters or {}, ensure_ascii=False, sort_keys=True, default=str),
+    )
+
+
+def dense_search_many(
+    questions: List[str],
+    *,
+    top_k: int = 50,
+    query_profile: Optional[Dict[str, Any]] = None,
+    filter_info: Optional[Dict[str, Any]] = None,
+    max_workers: int = 3,
+) -> Dict[str, List[Dict[str, Any]]]:
+    normalized: List[str] = []
+    seen = set()
+    for question in questions:
+        clean = _norm_space(question)
+        if clean and clean not in seen:
+            seen.add(clean)
+            normalized.append(clean)
+    if not normalized:
+        return {}
+
+    qdrant_filters = _qdrant_filters_from_query(query_profile or {}, filter_info)
+    results: Dict[str, List[Dict[str, Any]]] = {}
+    misses: List[str] = []
+    for question in normalized:
+        key = _dense_cache_key(question, top_k, qdrant_filters)
+        cached = _DENSE_SEARCH_CACHE.get(key)
+        if cached is not None:
+            results[question] = [dict(item) for item in cached]
+        else:
+            misses.append(question)
+    if not misses:
+        return results
+
     try:
-        q_vec = _question_embedding(question)
-        qdrant_filters = _qdrant_filters_from_query(query_profile or {}, filter_info)
+        vectors_by_question = _question_embeddings(misses)
         client = get_qdrant_client()
         if qdrant_filters:
             ensure_payload_indexes(client)
-        points = search_qdrant(client, q_vec, top_k=top_k, filters=qdrant_filters)
-    except Exception as exc:
-        logger.warning("Dense search skipped after Qdrant/OpenAI failure: %s", exc)
-        return []
 
-    ranked: List[Dict[str, Any]] = []
-    for point in points:
-        ranked.append(_qdrant_payload_to_passage(point))
-    ranked.sort(key=lambda x: float(x.get("dense_score", 0.0)), reverse=True)
-    for rank, item in enumerate(ranked[:top_k], start=1):
-        item["rank"] = rank
-    return ranked[:top_k]
+        def run_one(question: str) -> Tuple[str, List[Dict[str, Any]]]:
+            points = search_qdrant(client, vectors_by_question[question], top_k=top_k, filters=qdrant_filters)
+            ranked = [_qdrant_payload_to_passage(point) for point in points]
+            ranked.sort(key=lambda x: float(x.get("dense_score", 0.0)), reverse=True)
+            for rank, item in enumerate(ranked[:top_k], start=1):
+                item["rank"] = rank
+            return question, ranked[:top_k]
+
+        worker_count = max(1, min(int(max_workers or 1), len(misses)))
+        if worker_count == 1:
+            completed = [run_one(question) for question in misses]
+        else:
+            completed = []
+            with ThreadPoolExecutor(max_workers=worker_count) as pool:
+                futures = [pool.submit(run_one, question) for question in misses]
+                for future in as_completed(futures):
+                    completed.append(future.result())
+
+        for question, ranked in completed:
+            key = _dense_cache_key(question, top_k, qdrant_filters)
+            _DENSE_SEARCH_CACHE[key] = [dict(item) for item in ranked]
+            results[question] = ranked
+    except Exception as exc:
+        logger.warning(
+            "Dense search skipped after Qdrant/OpenAI failure: url=%s collection=%s top_k=%s filters=%s queries=%s error=%s",
+            getattr(settings, "qdrant_url", ""),
+            getattr(settings, "qdrant_collection", ""),
+            top_k,
+            qdrant_filters,
+            len(misses),
+            exc,
+        )
+        for question in misses:
+            results.setdefault(question, [])
+
+    return results
 
 
 def bm25_search_vi(question: str, candidates: List[Dict[str, Any]], top_k: int = 50) -> List[Dict[str, Any]]:

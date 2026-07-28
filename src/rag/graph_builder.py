@@ -16,7 +16,19 @@ from src.utils.loader import load_document
 logger = logging.getLogger(__name__)
 
 REFERENCE_NODE_TYPES_STRICT = {"article", "clause", "point"}
-REFERENCE_NODE_TYPES_EXTENDED = REFERENCE_NODE_TYPES_STRICT | {"section", "item", "bullet"}
+REFERENCE_NODE_TYPES_EXTENDED = REFERENCE_NODE_TYPES_STRICT | {
+    "section",
+    "appendix",
+    "attachment",
+    "roman_section",
+    "alpha_section",
+    "item",
+    "decimal_item",
+    "list_item",
+    "bullet",
+    "table",
+    "table_row",
+}
 
 
 def _norm_space(text: str) -> str:
@@ -126,7 +138,7 @@ def _is_reference_capable(node: Dict[str, Any]) -> bool:
 
 def _is_section_anchor(node: Dict[str, Any]) -> bool:
     node_type = _node_type(node)
-    return node_type in {"article", "clause", "point", "section", "item", "bullet"} and _is_reference_capable(node)
+    return node_type in REFERENCE_NODE_TYPES_EXTENDED and _is_reference_capable(node)
 
 
 def _descendants(graph: Dict[str, Any], node_id: str) -> List[str]:

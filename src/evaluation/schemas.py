@@ -10,6 +10,7 @@ BENCHMARK_INPUT_FALLBACKS = [
 ]
 BENCHMARK_JSONL = Path("data/eval/legal_benchmark_25.jsonl")
 RAG_OUTPUTS_JSONL = Path("data/eval/rag_outputs.jsonl")
+RAGAS_RESULTS = Path("data/eval/ragas_results.json")
 RAGAS_LITE_RESULTS = Path("data/eval/ragas_lite_results.json")
 JUDGE_CACHE = Path("data/eval/judge_cache.json")
 

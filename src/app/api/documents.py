@@ -8,6 +8,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from src.app.settings import settings
+from src.rag.document_header import extract_document_header
+from src.utils.loader import load_document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -169,10 +171,20 @@ def preview_document(filename: str = Query(..., min_length=1)) -> Dict[str, Any]
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
     preview_text = _read_preview(file_path).strip()
+    header_meta: Dict[str, Any] = {}
+    try:
+        header_meta = extract_document_header(load_document(file_path), fallback_name=file_path.stem).to_metadata()
+    except Exception:
+        header_meta = {}
     return {
         "filename": file_path.name,
         "title": _display_name(file_path),
         "suffix": file_path.suffix.lower(),
+        "doc_id": header_meta.get("doc_id") or "",
+        "doc_number": header_meta.get("doc_number") or "",
+        "official_title": header_meta.get("official_title") or header_meta.get("law_name") or _display_name(file_path),
+        "law_type": header_meta.get("law_type") or header_meta.get("doc_type") or "",
+        "year": header_meta.get("year") or 0,
         "preview": preview_text or "(Không trích xuất được nội dung xem nhanh)",
     }
 

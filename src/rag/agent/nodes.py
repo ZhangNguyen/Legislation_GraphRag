@@ -5,7 +5,8 @@ from typing import Any, Dict
 from src.rag.citation_validator import validate_citations
 from src.rag.context_grader import grade_context
 from src.rag.qa_engine import answer_with_rag
-from src.rag.retrieval_pipeline_simple import analyze_query, retrieve_with_graph_simple
+from src.rag.retrieval_pipeline_simple import analyze_query
+from src.rag.tree_guided_pipeline import retrieve_tree_guided
 
 
 def analyze_question(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -13,7 +14,7 @@ def analyze_question(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def retrieve_simple_rrf(state: Dict[str, Any]) -> Dict[str, Any]:
-    result = retrieve_with_graph_simple(
+    result = retrieve_tree_guided(
         question=str(state.get("question") or ""),
         graph=dict(state.get("graph") or {}),
         filters=dict(state.get("filters") or {}),

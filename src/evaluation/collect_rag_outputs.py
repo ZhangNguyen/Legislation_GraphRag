@@ -9,11 +9,17 @@ from src.app.runtime import ensure_runtime_graph
 from src.app.settings import settings
 from src.evaluation.schemas import BENCHMARK_JSONL, RAG_OUTPUTS_JSONL, read_jsonl, write_jsonl
 from src.evaluation.prepare_benchmark import prepare_benchmark
+from src.rag.answer_orchestrator import answer_tree_guided_with_retry
 from src.rag.qa_engine import answer_with_rag
 
 
 def _retrieve(question: str, graph: Dict[str, Any], top_k: int) -> Dict[str, Any]:
-    pipeline = str(getattr(settings, "retrieval_pipeline", "simple_rrf") or "simple_rrf").lower()
+    pipeline = str(getattr(settings, "retrieval_pipeline", "tree_guided") or "tree_guided").lower()
+    if pipeline in {"tree", "tree_guided", "tree-guided"}:
+        from src.rag.tree_guided_pipeline import retrieve_tree_guided
+
+        return retrieve_tree_guided(question, graph, final_top_k=top_k)
+
     if pipeline in {"simple", "simple_rrf"}:
         from src.rag.context_grader import grade_context
         from src.rag.retrieval_pipeline_simple import retrieve_with_graph_simple
@@ -63,8 +69,17 @@ def collect_outputs(input_path: str = str(BENCHMARK_JSONL), output_path: str = s
     for sample in samples:
         question = str(sample.get("question") or "")
         t0 = time.perf_counter()
-        retrieval_result = _retrieve(question, graph, top_k=top_k)
-        response = answer_with_rag(question, retrieval_result)
+        pipeline = str(getattr(settings, "retrieval_pipeline", "tree_guided") or "tree_guided").lower()
+        if pipeline in {"tree", "tree_guided", "tree-guided"}:
+            retrieval_result, response, adequacy = answer_tree_guided_with_retry(
+                question=question,
+                graph=graph,
+                final_top_k=top_k,
+            )
+        else:
+            retrieval_result = _retrieve(question, graph, top_k=top_k)
+            response = answer_with_rag(question, retrieval_result)
+            adequacy = {}
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
 
         contexts: List[str] = []
@@ -89,6 +104,8 @@ def collect_outputs(input_path: str = str(BENCHMARK_JSONL), output_path: str = s
                 "context_metadata": context_metadata,
                 "expected_context_refs": list(sample.get("expected_context_refs") or []),
                 "source_excerpt": sample.get("source_excerpt", ""),
+                "local_adequacy_judgement": adequacy,
+                "answer_retry_attempts": retrieval_result.get("answer_retry_attempts", []),
                 "latency_ms": latency_ms,
             }
         )

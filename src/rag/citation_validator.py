@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 _ARTICLE_RE = re.compile(r"điều\s+(\d+)", re.IGNORECASE)
 _CLAUSE_RE = re.compile(r"khoản\s+(\d+)", re.IGNORECASE)
-_POINT_RE = re.compile(r"điểm\s+([a-zđ])", re.IGNORECASE)
+_POINT_RE = re.compile(r"(?<!quan\s)điểm\s+([a-zđ])(?=\s|[,.;:)\]]|$)", re.IGNORECASE)
 _DOC_NUMBER_RE = re.compile(r"\b\d{1,4}/\d{4}/[A-ZĐ\-]+\b", re.IGNORECASE)
 
 
@@ -32,6 +32,13 @@ def _source_values(sources: List[Dict[str, Any]], key: str) -> set[str]:
             value = merged.get(candidate_key)
             if value not in (None, ""):
                 values.add(_norm_key(value))
+        if key == "doc_number":
+            source_text = " ".join(
+                _norm_space(merged.get(field) or "")
+                for field in ("text", "local_text", "snippet", "shared_text")
+            )
+            for match in _DOC_NUMBER_RE.finditer(source_text.upper()):
+                values.add(_norm_key(match.group(0).upper()))
     return values
 
 

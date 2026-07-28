@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Tuple
 
@@ -119,6 +120,32 @@ def _clean_doc_number(text: str) -> str:
     return val
 
 
+def _ascii_key(text: str) -> str:
+    raw = unicodedata.normalize("NFD", _norm_space(text))
+    raw = "".join(ch for ch in raw if unicodedata.category(ch) != "Mn")
+    raw = raw.replace("đ", "d").replace("Đ", "D")
+    return raw.lower()
+
+
+def _date_line_is_basis_or_proposal(line: str) -> bool:
+    key = _ascii_key(line)
+    return key.startswith(("can cu ", "theo de nghi", "xet "))
+
+
+def _line_mentions_doc_number(line: str, doc_number: str) -> bool:
+    doc_key = re.sub(r"[^a-z0-9]+", "", _ascii_key(doc_number))
+    line_key = re.sub(r"[^a-z0-9]+", "", _ascii_key(line))
+    return bool(doc_key and doc_key in line_key)
+
+
+def _date_from_match(match: re.Match[str]) -> Tuple[str, int, str]:
+    day = int(match.group("day"))
+    month = int(match.group("month"))
+    year = int(match.group("year"))
+    place = _norm_space(match.group("place") or "")
+    return f"{day:02d}/{month:02d}/{year:04d}", year, place
+
+
 def _doc_number_from_filename(fallback_name: str) -> str:
     fb = _norm_space(fallback_name).upper()
     if not fb:
@@ -166,29 +193,32 @@ def _pick_doc_number(lines: List[str], fallback_name: str = "") -> str:
     return _doc_number_from_filename(fallback_name)
 
 
-def _pick_date(lines: List[str], fallback_name: str = "") -> Tuple[str, int, str]:
-    # 1) ưu tiên bắt ngày ở đầu file
-    for line in lines[:60]:
-        m = DATE_RE.search(line)
-        if m:
-            day = int(m.group("day"))
-            month = int(m.group("month"))
-            year = int(m.group("year"))
-            place = _norm_space(m.group("place") or "")
-            return f"{day:02d}/{month:02d}/{year:04d}", year, place
+def _pick_date(lines: List[str], fallback_name: str = "", doc_number: str = "") -> Tuple[str, int, str]:
+    doc_number = doc_number or _doc_number_from_filename(fallback_name)
 
-    # 2) quét ngược toàn file để bắt case ngày nằm cuối văn bản
+    # 1) Ưu tiên ngày nằm cùng dòng với chính số văn bản, kể cả dòng "(Kèm theo Quyết định số ... ngày ...)".
+    if doc_number:
+        for line in lines:
+            m = DATE_RE.search(line)
+            if m and _line_mentions_doc_number(line, doc_number):
+                return _date_from_match(m)
+
+    # 2) Sau đó mới chọn ngày kiểu header, nhưng bỏ qua ngày trong căn cứ/tờ trình.
+    for line in lines[:80]:
+        m = DATE_RE.search(line)
+        if m and not _date_line_is_basis_or_proposal(line):
+            return _date_from_match(m)
+
+    # 3) Quét ngược toàn file để bắt case ngày nằm cuối văn bản, vẫn bỏ qua căn cứ/tờ trình.
     for line in reversed(lines):
         m = DATE_RE.search(line)
-        if m:
-            day = int(m.group("day"))
-            month = int(m.group("month"))
-            year = int(m.group("year"))
-            place = _norm_space(m.group("place") or "")
-            return f"{day:02d}/{month:02d}/{year:04d}", year, place
+        if m and not _date_line_is_basis_or_proposal(line):
+            return _date_from_match(m)
 
-    # 3) fallback kiểu dd/mm/yyyy trong file
+    # 4) fallback kiểu dd/mm/yyyy trong file
     for line in reversed(lines):
+        if _date_line_is_basis_or_proposal(line):
+            continue
         m = DATE_SLASH_RE.search(line)
         if m:
             day = int(m.group("day"))
@@ -196,7 +226,7 @@ def _pick_date(lines: List[str], fallback_name: str = "") -> Tuple[str, int, str
             year = int(m.group("year"))
             return f"{day:02d}/{month:02d}/{year:04d}", year, ""
 
-    # 4) fallback từ tên file nếu có
+    # 5) fallback từ tên file nếu có
     fb = _norm_space(fallback_name)
     m = DATE_SLASH_RE.search(fb)
     if m:
@@ -338,7 +368,7 @@ def extract_document_header(text: str, *, fallback_name: str = "") -> DocumentHe
 
     doc_type, doc_type_idx = _find_doc_type(lines)
     doc_number = _pick_doc_number(lines, fallback_name=fallback_name)
-    date_raw, year, place = _pick_date(lines, fallback_name=fallback_name)
+    date_raw, year, place = _pick_date(lines, fallback_name=fallback_name, doc_number=doc_number)
     title_block, official_title, body_start_index = _pick_title_block(lines, doc_type_idx)
     issuing_agency = _pick_issuing_agency(lines, doc_type_idx, official_title)
 
